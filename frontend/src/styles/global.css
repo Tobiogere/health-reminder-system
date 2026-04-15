@@ -1,0 +1,167 @@
+/* ===========================
+   CSS VARIABLES (Design Tokens)
+   =========================== */
+   :root {
+    --primary: #1A6B8A;
+    --primary-light: #E8F4F8;
+  
+    --patient-color: #2A8C6E;
+    --patient-light: #F4FAF7;
+  
+    --doctor-color: #1A6B8A;
+    --doctor-light: #E8F4F8;
+  
+    --pharmacist-color: #5A4DB2;
+    --pharmacist-light: #F8F4FF;
+  
+    --admin-color: #B25A1A;
+    --admin-light: #FFF5EE;
+  
+    --danger: #E53E3E;
+    --warning: #D69E2E;
+    --success: #2A8C6E;
+  
+    --text-dark: #1A202C;
+    --text-muted: #718096;
+    --border-color: #E2E8F0;
+    --bg-page: #F7FAFC;
+    --bg-card: #FFFFFF;
+  
+    --radius: 10px;
+    --shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.06);
+  }
+  
+  /* ===========================
+     GLOBAL RESETS
+     =========================== */
+  * {
+    box-sizing: border-box;
+  }
+  
+  body {
+    background-color: var(--bg-page);
+    color: var(--text-dark);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    margin: 0;
+  }
+  
+  /* ===========================
+     LAYOUT
+     =========================== */
+  .page-wrapper {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .dashboard-layout {
+    display: flex;
+    min-height: 100vh;
+  }
+  
+  .main-content {
+    flex: 1;
+    padding: 2rem;
+    background: var(--bg-page);
+  }
+  
+  /* ===========================
+     CARD
+     =========================== */
+  .card-custom {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    padding: 1.5rem;
+  }
+  
+  /* ===========================
+     BUTTONS
+     =========================== */
+  .btn-primary-custom {
+    background-color: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 9px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+  .btn-primary-custom:hover { background-color: #155d7a; }
+  
+  .btn-outline-custom {
+    background: transparent;
+    color: var(--primary);
+    border: 1.5px solid var(--primary);
+    border-radius: 8px;
+    padding: 8px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .btn-outline-custom:hover {
+    background: var(--primary);
+    color: white;
+  }
+  
+  /* ===========================
+     FORMS
+     =========================== */
+  .form-control-custom {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 14px;
+    color: var(--text-dark);
+    background: white;
+    transition: border-color 0.2s;
+  }
+  .form-control-custom:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(26, 107, 138, 0.12);
+  }
+  
+  /* ===========================
+     BADGES / STATUS PILLS
+     =========================== */
+  .badge-pending {
+    background: #FFF3CD;
+    color: #856404;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .badge-dispensed {
+    background: var(--patient-light);
+    color: var(--patient-color);
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .badge-missed {
+    background: #FEE2E2;
+    color: var(--danger);
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  
+  /* ===========================
+     RESPONSIVE UTILITIES
+     =========================== */
+  @media (max-width: 768px) {
+    .main-content { padding: 1rem; }
+    .dashboard-layout { flex-direction: column; }
+  }
