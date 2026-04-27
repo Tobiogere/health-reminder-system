@@ -1,0 +1,93 @@
+/* ── CSS Variables ── */
+:root {
+  --primary:      #C9A84C;   /* RUN Gold        */
+  --primary-dark: #8B6914;   /* Dark Gold       */
+  --success:      #198754;
+  --danger:       #dc3545;
+  --bg:           #faf9f7;   /* Warm off-white  */
+  --card-bg:      #ffffff;
+  --text:         #212529;
+  --muted:        #6c757d;
+  --radius:       12px;
+  --shadow:       0 4px 24px rgba(0,0,0,0.10);
+}
+  
+  /* ── Reset ── */
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background-color: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  
+  /* ── Utility ── */
+  .card-custom {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 2rem;
+  }
+  
+  .btn-primary-custom {
+    background-color: #C9A84C;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0.65rem 1.5rem;
+    width: 100%;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+  
+  .btn-primary-custom:hover {
+    background-color: #8B6914;
+  }
+
+/* ── Mobile Responsiveness ── */
+@media (max-width: 768px) {
+    .card-custom {
+      padding: 1rem;
+    }
+  
+    /* Tables scroll horizontally on mobile */
+    .table-responsive-custom {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+  
+    /* Hide text labels on very small screens */
+    .hide-mobile {
+      display: none !important;
+    }
+  
+    /* Full width buttons on mobile */
+    .btn-full-mobile {
+      width: 100%;
+    }
+  }
+  
+  /* ── Sidebar overlay on mobile ── */
+  .sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 998;
+  }
+  
+  @media (max-width: 768px) {
+    .sidebar-overlay {
+      display: block;
+    }
+  }
