@@ -2,6 +2,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
+
+from prescriptions.models import Prescription
 from .models import Appointment
 from .serializers import AppointmentSerializer, CreateAppointmentSerializer, ReviewAppointmentSerializer
 
@@ -29,13 +31,13 @@ def book_renewal(request, id):
         )
 
     from prescriptions.models import Prescription
-    try:
-        prescription = Prescription.objects.filter(
-            patient=request.user
-        ).last()
-    except Prescription.DoesNotExist:
+    prescription = Prescription.objects.filter(
+        patient=request.user
+    ).last()
+
+    if not prescription:
         return Response(
-            {'message': 'No prescription found.'},
+            {'message': 'No prescription found for this patient.'},
             status=status.HTTP_404_NOT_FOUND
         )
 
@@ -44,7 +46,7 @@ def book_renewal(request, id):
         patient=request.user,
         prescription=prescription,
         preferred_date=date.today(),
-        notes=f"Drug: {drug}. {note}",
+        notes=note,
         status='pending'
     )
 
@@ -80,7 +82,7 @@ def get_renewals(request):
             'id':          a.id,
             'patientName': patient_name,
             'patientId':   patient_id,
-            'drug':        a.notes,
+            'drug':        a.prescription.medication_name,
             'note':        a.notes,
             'requestDate': a.created_at,
             'status':      a.status,
