@@ -233,3 +233,138 @@ def get_patient_prescriptions(request, id):
             {'message': 'Patient not found.'},
             status=status.HTTP_404_NOT_FOUND
         )
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def update_profile(request):
+    """
+    Update the current user's profile.
+    """
+    data      = request.data
+    full_name = data.get('fullName')
+    phone     = data.get('phone')
+
+    try:
+        profile = request.user.patient_profile
+        if full_name:
+            profile.full_name = full_name
+        if phone:
+            profile.phone_number = phone
+        profile.save()
+    except:
+        # For non-patient users (doctors, pharmacists)
+        if full_name:
+            request.user.username = full_name
+            request.user.save()
+
+    return Response(
+        {'message': 'Profile updated successfully.'},
+        status=status.HTTP_200_OK
+    )
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def update_password(request):
+    """
+    Update the current user's password.
+    """
+    data             = request.data
+    current_password = data.get('currentPassword')
+    new_password     = data.get('newPassword')
+
+    if not current_password or not new_password:
+        return Response(
+            {'message': 'currentPassword and newPassword are required.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if not request.user.check_password(current_password):
+        return Response(
+            {'message': 'Current password is incorrect.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    request.user.set_password(new_password)
+    request.user.save()
+
+    return Response(
+        {'message': 'Password updated successfully.'},
+        status=status.HTTP_200_OK
+    )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_all_users(request):
+    """
+    Admin gets a list of all users.
+    """
+    if request.user.role != 'admin':
+        return Response(
+            {'message': 'Access denied.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    users = User.objects.all().order_by('-date_joined')
+    data  = []
+
+    for u in users:
+        user_data = {
+            'id':          u.id,
+            'name':        u.username,
+            'role':        u.role,
+            'status':      'Active' if u.is_active else 'Suspended',
+            'joined':      u.date_joined,
+            'identifier':  u.username,
+            'patientType': None,
+        }
+
+        if hasattr(u, 'patient_profile'):
+            user_data['name']        = u.patient_profile.full_name
+            user_data['identifier']  = u.patient_profile.matric_number
+            user_data['patientType'] = u.patient_profile.patient_type
+
+        data.append(user_data)
+
+    return Response(data, status=status.HTTP_200_OK)
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def update_user_status(request, id):
+    """
+    Admin suspends or activates a user.
+    """
+    if request.user.role != 'admin':
+        return Response(
+            {'message': 'Access denied.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    try:
+        user        = User.objects.get(id=id)
+        new_status  = request.data.get('status')
+
+        if new_status == 'Active':
+            user.is_active = True
+        elif new_status == 'Suspended':
+            user.is_active = False
+        else:
+            return Response(
+                {'message': 'Status must be Active or Suspended.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user.save()
+        return Response(
+            {'message': f'User status updated to {new_status}.'},
+            status=status.HTTP_200_OK
+        )
+
+    except User.DoesNotExist:
+        return Response(
+            {'message': 'User not found.'},
+            status=status.HTTP_404_NOT_FOUND
+        )

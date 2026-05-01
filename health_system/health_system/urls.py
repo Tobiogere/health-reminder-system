@@ -25,7 +25,11 @@ urlpatterns = [
     path('patients/', include('users.patient_urls')),
     path('prescriptions/', include('prescriptions.urls')),
     path('renewals/', include('appointments.urls')),
-    path('api/schedules/', include('schedules.urls')),
+    path('medications/', include('schedules.medication_urls')),
+    path('users/', include('users.profile_urls')),
+    path('notifications/', include('notifications.urls')),
+    path('admin-panel/', include('users.admin_urls')),
+    path('drugs/', include('drugs.urls')),
 
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
