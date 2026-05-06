@@ -26,32 +26,31 @@ export default function LoginScreen({ navigation }) {
       setError('Please fill in all fields.');
       return;
     }
-
+  
     try {
       setLoading(true);
       setError('');
-
-      // TODO: Replace with real API call
-      // const res = await axios.post('/auth/login', {
-      //   identifier,
-      //   password,
-      //   role: 'patient'
-      // });
-      // await AsyncStorage.setItem('token', res.data.token);
-      // await AsyncStorage.setItem('user', JSON.stringify(res.data.user));
-
-      // Simulate login for now
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      await AsyncStorage.setItem('token', 'dummy-token');
-      await AsyncStorage.setItem('user', JSON.stringify({
-        name: 'Test Patient',
-        role: 'patient',
-        identifier,
-      }));
-
+  
+      const response = await fetch('http://10.1.22.82:8000/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier, password, role: 'patient' }),
+      });
+  
+      const data = await response.json();
+      console.log('Server response:', JSON.stringify(data));
+  
+      if (!response.ok) {
+        setError(data.message || 'Invalid credentials.');
+        return;
+      }
+  
+      await AsyncStorage.setItem('token', data.token);
+      await AsyncStorage.setItem('user', JSON.stringify(data.user));
       navigation.replace('Dashboard');
+  
     } catch (err) {
-      setError('Invalid credentials. Please try again.');
+      setError('Could not connect to server. Please try again.');
     } finally {
       setLoading(false);
     }

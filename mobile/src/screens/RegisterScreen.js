@@ -64,7 +64,19 @@ export default function RegisterScreen({ navigation }) {
       setLoading(true);
       // TODO: Replace with real API call
       // await axios.post('/auth/register', formData);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const response = await fetch('http://10.1.22.82:8000/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        setError(data.message || 'Registration failed. Try again.');
+        return;
+      }
+      
       setSuccess(true);
       setTimeout(() => navigation.replace('Login'), 2000);
     } catch (err) {

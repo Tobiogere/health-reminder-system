@@ -1,90 +1,135 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import useAuth from '../../hooks/useAuth';
 import AddDosageDetails from './AddDosageDetails';
-import RenewalQueue from './RenewalQueue';
 import MissedDoseAlert from '../../components/MissedDoseAlert';
 import PageWrapper from '../../components/PageWrapper';
-
-// ── Dummy Data (replace with API later) ──────────────────────
-const prescriptionQueue = [
-  {
-    id: 1,
-    patientName: 'Chukwuemeka Obi',
-    patientId:   'STU/2024/001',
-    doctor:      'Dr. Adebayo',
-    diagnosis:   'Malaria',
-    drugs:       ['Paracetamol 500mg', 'Coartem'],
-    date:        '18 Apr 2026',
-    status:      'Pending',
-  },
-  {
-    id: 2,
-    patientName: 'Amina Bello',
-    patientId:   'STU/2024/042',
-    doctor:      'Dr. Okafor',
-    diagnosis:   'Typhoid',
-    drugs:       ['Ciprofloxacin 500mg', 'ORS'],
-    date:        '18 Apr 2026',
-    status:      'Pending',
-  },
-  {
-    id: 3,
-    patientName: 'Grace Eze',
-    patientId:   '08031234567',
-    doctor:      'Dr. Adebayo',
-    diagnosis:   'Upper RTI',
-    drugs:       ['Amoxicillin 500mg', 'Vitamin C 1000mg'],
-    date:        '17 Apr 2026',
-    status:      'Processed',
-  },
-];
-
-const renewalRequests = [
-  {
-    id: 1,
-    patientName: 'Chukwuemeka Obi',
-    patientId:   'STU/2024/001',
-    drug:        'Paracetamol 500mg',
-    requestDate: '18 Apr 2026',
-    status:      'Pending',
-  },
-  {
-    id: 2,
-    patientName: 'Grace Eze',
-    patientId:   '08031234567',
-    drug:        'Vitamin C 1000mg',
-    requestDate: '17 Apr 2026',
-    status:      'Pending',
-  },
-];
-// ─────────────────────────────────────────────────────────────
 
 const PharmacistDashboard = () => {
   const { user }                                        = useAuth();
   const [sidebarOpen, setSidebarOpen]                   = useState(window.innerWidth > 768);
   const [activeTab, setActiveTab]                       = useState('queue');
   const [selectedPrescription, setSelectedPrescription] = useState(null);
-  const [queue, setQueue]                               = useState(prescriptionQueue);
+  const [queue, setQueue]                               = useState([]);
+  const [renewals, setRenewals]                         = useState([]);
+  const [loading, setLoading]                           = useState(true);
+  const [renewalLoading, setRenewalLoading]             = useState(true);
+
+  const token = localStorage.getItem('token');
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
-
-  const pendingCount   = queue.filter(p => p.status === 'Pending').length;
-  const processedCount = queue.filter(p => p.status === 'Processed').length;
-  const renewalCount   = renewalRequests.filter(r => r.status === 'Pending').length;
 
   const today = new Date().toLocaleDateString('en-GB', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   });
 
-  const handleDosageSubmit = (dosageData) => {
-    // TODO: Replace with API call — POST /prescriptions/:id/dosage
-    console.log('Dosage submitted:', dosageData);
-    setQueue(queue.map(p =>
-      p.id === selectedPrescription.id ? { ...p, status: 'Processed' } : p
-    ));
-    setSelectedPrescription(null);
-    alert(`Schedule generated for ${dosageData.patientName}. Patient will receive reminders.`);
+  // ── Fetch prescription queue ──
+  const fetchQueue = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('http://127.0.0.1:8000/prescriptions/queue', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type':  'application/json',
+        },
+      });
+      const data = await res.json();
+      if (res.ok && Array.isArray(data)) {
+        setQueue(data);
+      }
+    } catch (err) {
+      console.error('Error fetching queue:', err);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  // ── Fetch renewals ──
+  const fetchRenewals = async () => {
+    try {
+      setRenewalLoading(true);
+      const res = await fetch('http://127.0.0.1:8000/renewals/', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type':  'application/json',
+        },
+      });
+      const data = await res.json();
+      if (res.ok && Array.isArray(data)) {
+        setRenewals(data);
+      }
+    } catch (err) {
+      console.error('Error fetching renewals:', err);
+    } finally {
+      setRenewalLoading(false);
+    }
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchQueue(); fetchRenewals(); }, []);
+
+  // ── Handle dosage submission ──
+  const handleDosageSubmit = async (dosageData) => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/prescriptions/${selectedPrescription.id}/dosage`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type':  'application/json',
+        },
+        body: JSON.stringify({ dosages: dosageData.dosages }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setSelectedPrescription(null);
+        fetchQueue();
+        alert(`Schedule generated for ${dosageData.patientName}. Patient will receive reminders.`);
+      } else {
+        alert(data.message || 'Failed to add dosage.');
+      }
+    } catch (err) {
+      alert('Could not connect to server. Please try again.');
+    }
+  };
+
+  // ── Handle approve/reject renewal ──
+  const handleApprove = async (id) => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/renewals/${id}/approve`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type':  'application/json',
+        },
+      });
+      if (res.ok) {
+        setRenewals(renewals.map(r => r.id === id ? { ...r, status: 'approved' } : r));
+      }
+    } catch (err) {
+      console.error('Error approving renewal:', err);
+    }
+  };
+
+  const handleReject = async (id) => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/renewals/${id}/reject`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type':  'application/json',
+        },
+      });
+      if (res.ok) {
+        setRenewals(renewals.map(r => r.id === id ? { ...r, status: 'rejected' } : r));
+      }
+    } catch (err) {
+      console.error('Error rejecting renewal:', err);
+    }
+  };
+
+  const pendingCount  = queue.filter(p => p.status === 'pending').length;
+  const renewalCount  = renewals.filter(r => r.status === 'pending').length;
 
   // Show dosage form if prescription selected
   if (selectedPrescription) {
@@ -134,9 +179,9 @@ const PharmacistDashboard = () => {
         <div className="col-6 col-md-3">
           <div className="card-custom text-center" style={{ padding: '1rem' }}>
             <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#198754' }}>
-              {processedCount}
+              {queue.filter(p => p.status === 'active').length}
             </div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>Processed Today</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>Processed</div>
           </div>
         </div>
         <div className="col-6 col-md-3">
@@ -152,7 +197,7 @@ const PharmacistDashboard = () => {
             <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#C9A84C' }}>
               {queue.length}
             </div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>Total Today</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>Total Queue</div>
           </div>
         </div>
       </div>
@@ -190,77 +235,186 @@ const PharmacistDashboard = () => {
           <h5 style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '1rem' }}>
             📋 Prescription Queue
           </h5>
-          {queue.map(rx => (
-            <div
-              key={rx.id}
-              style={{
-                padding: '1rem',
-                marginBottom: '0.75rem',
-                borderRadius: '8px',
-                border: `1px solid ${rx.status === 'Pending' ? '#ffc107' : '#b7ebc8'}`,
-                backgroundColor: rx.status === 'Pending' ? '#fffdf0' : '#f0fff4',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.3rem' }}>
-                    <span style={{ fontWeight: 700, fontSize: '0.92rem' }}>{rx.patientName}</span>
-                    <span style={{
-                      fontSize: '0.72rem',
-                      fontWeight: 600,
-                      padding: '0.15rem 0.5rem',
-                      borderRadius: '999px',
-                      backgroundColor: rx.status === 'Pending' ? '#fff3cd' : '#d1e7dd',
-                      color:           rx.status === 'Pending' ? '#856404' : '#0f5132',
-                    }}>
-                      {rx.status}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginBottom: '0.3rem' }}>
-                    ID: {rx.patientId} · {rx.doctor} · {rx.date}
-                  </div>
-                  <div style={{ fontSize: '0.82rem', marginBottom: '0.3rem' }}>
-                    🩺 <strong>Diagnosis:</strong> {rx.diagnosis}
-                  </div>
-                  <div style={{ fontSize: '0.82rem' }}>
-                    💊 <strong>Drugs:</strong> {rx.drugs.join(', ')}
-                  </div>
-                </div>
-
-                {rx.status === 'Pending' && (
-                  <button
-                    onClick={() => setSelectedPrescription(rx)}
-                    style={{
-                      backgroundColor: '#6f42c1',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '6px',
-                      padding: '0.4rem 1rem',
-                      fontWeight: 600,
-                      fontSize: '0.82rem',
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    ➕ Add Dosage
-                  </button>
-                )}
-                {rx.status === 'Processed' && (
-                  <span style={{ fontSize: '0.82rem', color: '#198754', fontWeight: 600 }}>
-                    ✅ Schedule Generated
-                  </span>
-                )}
-              </div>
+          {loading ? (
+            <div className="text-center py-3">
+              <div className="spinner-border spinner-border-sm" style={{ color: 'var(--primary)' }} />
             </div>
-          ))}
+          ) : queue.length === 0 ? (
+            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', textAlign: 'center', padding: '2rem' }}>
+              No pending prescriptions.
+            </p>
+          ) : (
+            queue.map(rx => (
+              <div
+                key={rx.id}
+                style={{
+                  padding: '1rem',
+                  marginBottom: '0.75rem',
+                  borderRadius: '8px',
+                  border: `1px solid ${rx.status === 'pending' ? '#ffc107' : '#b7ebc8'}`,
+                  backgroundColor: rx.status === 'pending' ? '#fffdf0' : '#f0fff4',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.3rem' }}>
+                      <span style={{ fontWeight: 700, fontSize: '0.92rem' }}>{rx.patientName}</span>
+                      <span style={{
+                        fontSize: '0.72rem',
+                        fontWeight: 600,
+                        padding: '0.15rem 0.5rem',
+                        borderRadius: '999px',
+                        backgroundColor: rx.status === 'pending' ? '#fff3cd' : '#d1e7dd',
+                        color:           rx.status === 'pending' ? '#856404' : '#0f5132',
+                        textTransform: 'capitalize',
+                      }}>
+                        {rx.status}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginBottom: '0.3rem' }}>
+                      📅 {new Date(rx.createdAt).toLocaleDateString('en-GB')}
+                    </div>
+                    <div style={{ fontSize: '0.82rem', marginBottom: '0.3rem' }}>
+                      🩺 <strong>Diagnosis:</strong> {rx.diagnosis}
+                    </div>
+                    <div style={{ fontSize: '0.82rem' }}>
+                      💊 <strong>Drug:</strong> {rx.medicationName}
+                    </div>
+                  </div>
+
+                  {rx.status === 'pending' && (
+                    <button
+                      onClick={() => setSelectedPrescription({
+                        ...rx,
+                        drugs: [rx.medicationName],
+                      })}
+                      style={{
+                        backgroundColor: '#6f42c1',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '0.4rem 1rem',
+                        fontWeight: 600,
+                        fontSize: '0.82rem',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      ➕ Add Dosage
+                    </button>
+                  )}
+                  {rx.status !== 'pending' && (
+                    <span style={{ fontSize: '0.82rem', color: '#198754', fontWeight: 600 }}>
+                      ✅ Schedule Generated
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
         </div>
       )}
 
       {/* ── Renewals Tab ── */}
       {activeTab === 'renewals' && (
-        <RenewalQueue renewalRequests={renewalRequests} />
-      )}
+        <div className="card-custom">
+          <h5 style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '1rem' }}>
+            🔄 Renewal Requests
+          </h5>
+          {renewalLoading ? (
+            <div className="text-center py-3">
+              <div className="spinner-border spinner-border-sm" style={{ color: 'var(--primary)' }} />
+            </div>
+          ) : renewals.length === 0 ? (
+            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', textAlign: 'center', padding: '2rem' }}>
+              No renewal requests at this time.
+            </p>
+          ) : (
+            renewals.map(r => (
+              <div
+                key={r.id}
+                style={{
+                  padding: '1rem',
+                  marginBottom: '0.75rem',
+                  borderRadius: '8px',
+                  border: `1px solid ${
+                    r.status === 'approved' ? '#b7ebc8' :
+                    r.status === 'rejected' ? '#f5c2c7' : '#dee2e6'
+                  }`,
+                  backgroundColor:
+                    r.status === 'approved' ? '#f0fff4' :
+                    r.status === 'rejected' ? '#fff5f5' : '#ffffff',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.92rem', marginBottom: '0.2rem' }}>
+                      {r.patientName}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginBottom: '0.2rem' }}>
+                      ID: {r.patientId} · Requested: {new Date(r.requestDate).toLocaleDateString('en-GB')}
+                    </div>
+                    <div style={{ fontSize: '0.82rem', marginBottom: r.note ? '0.2rem' : 0 }}>
+                      💊 <strong>Drug:</strong> {r.drug}
+                    </div>
+                    {r.note && (
+                      <div style={{ fontSize: '0.78rem', color: 'var(--muted)', fontStyle: 'italic' }}>
+                        📝 "{r.note}"
+                      </div>
+                    )}
+                  </div>
 
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    {r.status === 'pending' ? (
+                      <>
+                        <button
+                          onClick={() => handleApprove(r.id)}
+                          style={{
+                            backgroundColor: '#198754',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            padding: '0.35rem 0.85rem',
+                            fontWeight: 600,
+                            fontSize: '0.78rem',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          ✅ Approve
+                        </button>
+                        <button
+                          onClick={() => handleReject(r.id)}
+                          style={{
+                            backgroundColor: '#dc3545',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            padding: '0.35rem 0.85rem',
+                            fontWeight: 600,
+                            fontSize: '0.78rem',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          ❌ Reject
+                        </button>
+                      </>
+                    ) : (
+                      <span style={{
+                        fontSize: '0.82rem',
+                        fontWeight: 700,
+                        color: r.status === 'approved' ? '#198754' : '#dc3545',
+                        textTransform: 'capitalize',
+                      }}>
+                        {r.status === 'approved' ? '✅ Approved' : '❌ Rejected'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </PageWrapper>
   );
 };

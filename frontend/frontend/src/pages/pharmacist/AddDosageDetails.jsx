@@ -1,19 +1,16 @@
 import React, { useState } from 'react';
 
 const frequencyOptions = [
-  { label: 'Once daily',       times: ['08:00 AM'] },
-  { label: 'Twice daily',      times: ['08:00 AM', '08:00 PM'] },
-  { label: 'Three times daily',times: ['08:00 AM', '02:00 PM', '08:00 PM'] },
-  { label: 'Four times daily', times: ['08:00 AM', '12:00 PM', '04:00 PM', '10:00 PM'] },
-  { label: 'Every 8 hours',    times: ['08:00 AM', '04:00 PM', '12:00 AM'] },
+  { label: 'Once daily',        value: 1, times: ['08:00'] },
+  { label: 'Twice daily',       value: 2, times: ['08:00', '20:00'] },
+  { label: 'Three times daily', value: 3, times: ['08:00', '14:00', '20:00'] },
+  { label: 'Four times daily',  value: 4, times: ['08:00', '12:00', '16:00', '22:00'] },
+  { label: 'Every 8 hours',     value: 3, times: ['08:00', '16:00', '00:00'] },
 ];
 
-const durationOptions = [
-  '3 days', '5 days', '7 days', '10 days', '14 days', '21 days', '30 days',
-];
+const durationOptions = [3, 5, 7, 10, 14, 21, 30];
 
 const AddDosageDetails = ({ prescription, pharmacistName, onSubmit, onCancel }) => {
-  // One dosage entry per drug
   const initialDosages = prescription.drugs.map((drug) => ({
     drug,
     dosage:    '',
@@ -24,15 +21,16 @@ const AddDosageDetails = ({ prescription, pharmacistName, onSubmit, onCancel }) 
 
   const [dosages, setDosages] = useState(initialDosages);
   const [error, setError]     = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const updateDosage = (index, field, value) => {
     const updated = [...dosages];
     updated[index] = { ...updated[index], [field]: value };
 
-    // Auto-fill times when frequency is selected
     if (field === 'frequency') {
       const found = frequencyOptions.find(f => f.label === value);
-      updated[index].times = found ? [...found.times] : [];
+      updated[index].times         = found ? [...found.times] : [];
+      updated[index].frequencyValue = found ? found.value : 1;
     }
 
     setDosages(updated);
@@ -54,7 +52,7 @@ const AddDosageDetails = ({ prescription, pharmacistName, onSubmit, onCancel }) 
     return null;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const validationError = validate();
     if (validationError) {
@@ -62,14 +60,26 @@ const AddDosageDetails = ({ prescription, pharmacistName, onSubmit, onCancel }) 
       return;
     }
 
-    onSubmit({
+    setSubmitting(true);
+
+    // Format dosages for backend
+    const formattedDosages = dosages.map(d => ({
+      dosage:    d.dosage,
+      frequency: d.frequencyValue || 1,
+      duration:  parseInt(d.duration),
+      times:     d.times,
+    }));
+
+    await onSubmit({
       prescriptionId: prescription.id,
       patientName:    prescription.patientName,
       patientId:      prescription.patientId,
       pharmacistName,
-      dosages,
-      processedAt: new Date().toISOString(),
+      dosages:        formattedDosages,
+      processedAt:    new Date().toISOString(),
     });
+
+    setSubmitting(false);
   };
 
   return (
@@ -115,8 +125,7 @@ const AddDosageDetails = ({ prescription, pharmacistName, onSubmit, onCancel }) 
             Prescription Summary
           </div>
           <div style={{ color: 'var(--muted)' }}>
-            👤 {prescription.patientName} ({prescription.patientId}) &nbsp;·&nbsp;
-            👨‍⚕️ {prescription.doctor} &nbsp;·&nbsp;
+            👤 {prescription.patientName} &nbsp;·&nbsp;
             🩺 {prescription.diagnosis}
           </div>
         </div>
@@ -168,7 +177,7 @@ const AddDosageDetails = ({ prescription, pharmacistName, onSubmit, onCancel }) 
               {/* Duration */}
               <div className="col-12 col-md-4">
                 <label className="form-label fw-semibold" style={{ fontSize: '0.85rem' }}>
-                  Duration <span style={{ color: '#dc3545' }}>*</span>
+                  Duration (days) <span style={{ color: '#dc3545' }}>*</span>
                 </label>
                 <select
                   className="form-select form-select-sm"
@@ -177,7 +186,7 @@ const AddDosageDetails = ({ prescription, pharmacistName, onSubmit, onCancel }) 
                 >
                   <option value="">-- Select --</option>
                   {durationOptions.map(d => (
-                    <option key={d} value={d}>{d}</option>
+                    <option key={d} value={d}>{d} days</option>
                   ))}
                 </select>
               </div>
@@ -188,7 +197,7 @@ const AddDosageDetails = ({ prescription, pharmacistName, onSubmit, onCancel }) 
                   <label className="form-label fw-semibold" style={{ fontSize: '0.85rem' }}>
                     Reminder Times
                     <span style={{ color: 'var(--muted)', fontWeight: 400, marginLeft: '0.4rem' }}>
-                      (auto-filled, adjust if needed)
+                      (auto-filled in 24hr format, adjust if needed)
                     </span>
                   </label>
                   <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -197,18 +206,7 @@ const AddDosageDetails = ({ prescription, pharmacistName, onSubmit, onCancel }) 
                         key={ti}
                         type="time"
                         className="form-control form-control-sm"
-                        value={
-                          // convert "08:00 AM" to 24hr for input
-                          time.includes('AM') || time.includes('PM')
-                            ? (() => {
-                                const [t, meridiem] = time.split(' ');
-                                let [h, m] = t.split(':').map(Number);
-                                if (meridiem === 'PM' && h !== 12) h += 12;
-                                if (meridiem === 'AM' && h === 12) h = 0;
-                                return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-                              })()
-                            : time
-                        }
+                        value={time}
                         onChange={(e) => updateTime(index, ti, e.target.value)}
                         style={{ maxWidth: '130px' }}
                       />
@@ -216,7 +214,6 @@ const AddDosageDetails = ({ prescription, pharmacistName, onSubmit, onCancel }) 
                   </div>
                 </div>
               )}
-
             </div>
           </div>
         ))}
@@ -232,6 +229,7 @@ const AddDosageDetails = ({ prescription, pharmacistName, onSubmit, onCancel }) 
         <div style={{ display: 'flex', gap: '0.75rem' }}>
           <button
             type="submit"
+            disabled={submitting}
             style={{
               backgroundColor: '#6f42c1',
               color: '#fff',
@@ -242,9 +240,10 @@ const AddDosageDetails = ({ prescription, pharmacistName, onSubmit, onCancel }) 
               fontSize: '0.88rem',
               cursor: 'pointer',
               flex: 1,
+              opacity: submitting ? 0.7 : 1,
             }}
           >
-            ✅ Generate Schedule & Notify Patient
+            {submitting ? 'Generating...' : '✅ Generate Schedule & Notify Patient'}
           </button>
           <button
             type="button"

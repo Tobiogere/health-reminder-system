@@ -1,23 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import useAuth from '../../hooks/useAuth';
 import NewPrescription from './NewPrescription';
 import MissedDoseAlert from '../../components/MissedDoseAlert';
 import PageWrapper from '../../components/PageWrapper';
-
-// ── Dummy patient database (replace with API later) ──────────
-const patientDatabase = [
-  { id: 'STU/2024/001', name: 'Chukwuemeka Obi',  gender: 'Male',   patientType: 'student',  department: 'Computer Science' },
-  { id: 'STU/2024/042', name: 'Amina Bello',       gender: 'Female', patientType: 'student',  department: 'Medicine' },
-  { id: 'STF/2024/010', name: 'Mr. Tunde Adeyemi', gender: 'Male',   patientType: 'staff',    department: null },
-  { id: '08031234567',  name: 'Grace Eze',          gender: 'Female', patientType: 'external', department: null },
-];
-
-const recentPrescriptions = [
-  { id: 1, patientName: 'Chukwuemeka Obi', diagnosis: 'Malaria',   drugs: 'Paracetamol, Coartem',   date: '18 Apr 2026', status: 'Sent to Pharmacy' },
-  { id: 2, patientName: 'Amina Bello',     diagnosis: 'Typhoid',   drugs: 'Ciprofloxacin, ORS',     date: '17 Apr 2026', status: 'Sent to Pharmacy' },
-  { id: 3, patientName: 'Grace Eze',       diagnosis: 'Upper RTI', drugs: 'Amoxicillin, Vitamin C', date: '16 Apr 2026', status: 'Sent to Pharmacy' },
-];
-// ─────────────────────────────────────────────────────────────
 
 const DoctorDashboard = () => {
   const { user }                              = useAuth();
@@ -25,42 +10,109 @@ const DoctorDashboard = () => {
   const [searchQuery, setSearchQuery]         = useState('');
   const [searchResult, setSearchResult]       = useState(null);
   const [searchError, setSearchError]         = useState('');
+  const [searching, setSearching]             = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
+  const [prescriptions, setPrescriptions]     = useState([]);
+  const [loadingPrescriptions, setLoadingPrescriptions] = useState(true);
+
+  const token = localStorage.getItem('token');
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
-
-  const handleSearch = (e) => {
-    e.preventDefault();
-    setSearchError('');
-    setSearchResult(null);
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) {
-      setSearchError('Please enter a Patient ID or name.');
-      return;
-    }
-    const found = patientDatabase.find(p =>
-      p.id.toLowerCase() === query ||
-      p.name.toLowerCase().includes(query)
-    );
-    if (found) {
-      setSearchResult(found);
-    } else {
-      setSearchError('No patient found with that ID or name.');
-    }
-  };
-
-  const handlePrescriptionSubmit = (prescriptionData) => {
-    // TODO: Replace with API call — POST /prescriptions
-    console.log('Prescription submitted:', prescriptionData);
-    setSelectedPatient(null);
-    setSearchResult(null);
-    setSearchQuery('');
-    alert(`Prescription for ${prescriptionData.patientName} sent to pharmacy.`);
-  };
 
   const today = new Date().toLocaleDateString('en-GB', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   });
+
+  // ── Fetch doctor's prescriptions ──
+  const fetchPrescriptions = async () => {
+    try {
+      setLoadingPrescriptions(true);
+      const storedUser = JSON.parse(localStorage.getItem('user'));
+      const res = await fetch(`http://127.0.0.1:8000/prescriptions/doctor/${storedUser.id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type':  'application/json',
+        },
+      });
+      const data = await res.json();
+      if (res.ok && Array.isArray(data)) {
+        setPrescriptions(data);
+      }
+    } catch (err) {
+      console.error('Error fetching prescriptions:', err);
+    } finally {
+      setLoadingPrescriptions(false);
+    }
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchPrescriptions(); }, []);
+
+  // ── Search patient by identifier ──
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    setSearchError('');
+    setSearchResult(null);
+    const query = searchQuery.trim();
+    if (!query) {
+      setSearchError('Please enter a Patient ID or matric number.');
+      return;
+    }
+
+    try {
+      setSearching(true);
+      const res = await fetch(`http://127.0.0.1:8000/patients/${encodeURIComponent(query)}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type':  'application/json',
+        },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSearchResult(data);
+      } else {
+        setSearchError(data.message || 'No patient found with that ID.');
+      }
+    } catch (err) {
+      setSearchError('Could not connect to server. Please try again.');
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  // ── Handle prescription submission ──
+  const handlePrescriptionSubmit = async (prescriptionData) => {
+    try {
+      const res = await fetch('http://127.0.0.1:8000/prescriptions/', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type':  'application/json',
+        },
+        body: JSON.stringify({
+          patientId:  searchResult.id,
+          diagnosis:  prescriptionData.diagnosis,
+          drugs:      prescriptionData.drugs,
+          notes:      prescriptionData.notes,
+          doctorName: user?.name,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setSelectedPatient(null);
+        setSearchResult(null);
+        setSearchQuery('');
+        fetchPrescriptions();
+        alert(`Prescription for ${prescriptionData.patientName} sent to pharmacy successfully.`);
+      } else {
+        alert(data.message || 'Failed to submit prescription.');
+      }
+    } catch (err) {
+      alert('Could not connect to server. Please try again.');
+    }
+  };
 
   // Show prescription form if patient selected
   if (selectedPatient) {
@@ -79,6 +131,12 @@ const DoctorDashboard = () => {
       </PageWrapper>
     );
   }
+
+  const pendingCount    = prescriptions.filter(p => p.status === 'pending').length;
+  const todayCount      = prescriptions.filter(p => {
+    const today = new Date().toDateString();
+    return new Date(p.created_at).toDateString() === today;
+  }).length;
 
   return (
     <PageWrapper
@@ -102,7 +160,7 @@ const DoctorDashboard = () => {
         <div className="col-6 col-md-3">
           <div className="card-custom text-center" style={{ padding: '1rem' }}>
             <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#198754' }}>
-              {recentPrescriptions.length}
+              {todayCount}
             </div>
             <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>Prescriptions Today</div>
           </div>
@@ -110,21 +168,25 @@ const DoctorDashboard = () => {
         <div className="col-6 col-md-3">
           <div className="card-custom text-center" style={{ padding: '1rem' }}>
             <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#C9A84C' }}>
-              {patientDatabase.length}
+              {prescriptions.length}
             </div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>Patients in System</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>Total Prescriptions</div>
           </div>
         </div>
         <div className="col-6 col-md-3">
           <div className="card-custom text-center" style={{ padding: '1rem' }}>
-            <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#6f42c1' }}>2</div>
+            <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#6f42c1' }}>
+              {pendingCount}
+            </div>
             <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>Pending Pharmacy</div>
           </div>
         </div>
         <div className="col-6 col-md-3">
           <div className="card-custom text-center" style={{ padding: '1rem' }}>
-            <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#fd7e14' }}>1</div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>Renewal Requests</div>
+            <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#fd7e14' }}>
+              {prescriptions.filter(p => p.status === 'active').length}
+            </div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>Active</div>
           </div>
         </div>
       </div>
@@ -139,7 +201,7 @@ const DoctorDashboard = () => {
             <input
               type="text"
               className="form-control form-control-sm"
-              placeholder="Enter Patient ID or Full Name"
+              placeholder="Enter Matric Number or Staff ID"
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
@@ -150,6 +212,7 @@ const DoctorDashboard = () => {
             />
             <button
               type="submit"
+              disabled={searching}
               style={{
                 backgroundColor: '#198754',
                 color: '#fff',
@@ -161,7 +224,7 @@ const DoctorDashboard = () => {
                 cursor: 'pointer',
               }}
             >
-              Search
+              {searching ? 'Searching...' : 'Search'}
             </button>
           </div>
         </form>
@@ -188,11 +251,16 @@ const DoctorDashboard = () => {
             <div>
               <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{searchResult.name}</div>
               <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
-                ID: {searchResult.id} &nbsp;·&nbsp;
+                ID: {searchResult.identifier || searchResult.id} &nbsp;·&nbsp;
                 {searchResult.gender} &nbsp;·&nbsp;
                 <span style={{ textTransform: 'capitalize' }}>{searchResult.patientType}</span>
                 {searchResult.department && ` · ${searchResult.department}`}
               </div>
+              {searchResult.prescriptionCount !== undefined && (
+                <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: '0.2rem' }}>
+                  📋 {searchResult.prescriptionCount} past prescription(s)
+                </div>
+              )}
             </div>
             <button
               onClick={() => setSelectedPatient(searchResult)}
@@ -216,50 +284,71 @@ const DoctorDashboard = () => {
       {/* ── Recent Prescriptions ── */}
       <div className="card-custom">
         <h5 style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '1rem' }}>
-          📋 Recent Prescriptions
+          📋 My Prescriptions
         </h5>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#f8f9fa', textAlign: 'left' }}>
-                {['Patient', 'Diagnosis', 'Drugs', 'Date', 'Status'].map(h => (
-                  <th key={h} style={{
-                    padding: '0.6rem 0.8rem',
-                    fontWeight: 600,
-                    color: 'var(--muted)',
-                    borderBottom: '1px solid #e9ecef',
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {recentPrescriptions.map(rx => (
-                <tr key={rx.id} style={{ borderBottom: '1px solid #e9ecef' }}>
-                  <td style={{ padding: '0.65rem 0.8rem', fontWeight: 600 }}>{rx.patientName}</td>
-                  <td style={{ padding: '0.65rem 0.8rem' }}>{rx.diagnosis}</td>
-                  <td style={{ padding: '0.65rem 0.8rem', color: 'var(--muted)' }}>{rx.drugs}</td>
-                  <td style={{ padding: '0.65rem 0.8rem', whiteSpace: 'nowrap' }}>{rx.date}</td>
-                  <td style={{ padding: '0.65rem 0.8rem' }}>
-                    <span style={{
-                      backgroundColor: '#d1e7dd',
-                      color: '#0f5132',
-                      borderRadius: '999px',
-                      padding: '0.2rem 0.6rem',
-                      fontSize: '0.72rem',
+        {loadingPrescriptions ? (
+          <div className="text-center py-3">
+            <div className="spinner-border spinner-border-sm" style={{ color: 'var(--primary)' }} />
+          </div>
+        ) : prescriptions.length === 0 ? (
+          <p style={{ color: 'var(--muted)', fontSize: '0.85rem', textAlign: 'center', padding: '1rem' }}>
+            No prescriptions yet. Search for a patient to write one.
+          </p>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f8f9fa', textAlign: 'left' }}>
+                  {['Patient', 'Diagnosis', 'Drug', 'Date', 'Status'].map(h => (
+                    <th key={h} style={{
+                      padding: '0.6rem 0.8rem',
                       fontWeight: 600,
+                      color: 'var(--muted)',
+                      borderBottom: '1px solid #e9ecef',
                       whiteSpace: 'nowrap',
                     }}>
-                      {rx.status}
-                    </span>
-                  </td>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {prescriptions.map(rx => (
+                  <tr key={rx.id} style={{ borderBottom: '1px solid #e9ecef' }}>
+                    <td style={{ padding: '0.65rem 0.8rem', fontWeight: 600 }}>
+                      {rx.patient_fullname || rx.patient_username}
+                    </td>
+                    <td style={{ padding: '0.65rem 0.8rem' }}>{rx.diagnosis}</td>
+                    <td style={{ padding: '0.65rem 0.8rem', color: 'var(--muted)' }}>
+                      {rx.medication_name}
+                    </td>
+                    <td style={{ padding: '0.65rem 0.8rem', whiteSpace: 'nowrap' }}>
+                      {new Date(rx.created_at).toLocaleDateString('en-GB', {
+                        day: 'numeric', month: 'short', year: 'numeric'
+                      })}
+                    </td>
+                    <td style={{ padding: '0.65rem 0.8rem' }}>
+                      <span style={{
+                        backgroundColor: rx.status === 'active'  ? '#d1e7dd' :
+                                         rx.status === 'pending' ? '#fff3cd' : '#e2e3e5',
+                        color:           rx.status === 'active'  ? '#0f5132' :
+                                         rx.status === 'pending' ? '#856404' : '#41464b',
+                        borderRadius: '999px',
+                        padding: '0.2rem 0.6rem',
+                        fontSize: '0.72rem',
+                        fontWeight: 600,
+                        textTransform: 'capitalize',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {rx.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
     </PageWrapper>
