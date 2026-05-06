@@ -131,6 +131,7 @@ def login(request):
 
     # Build user info for response
     user_data = {
+        'id': user.id,
         'name': user.username,
         'role': user.role,
         'identifier': user.username,
