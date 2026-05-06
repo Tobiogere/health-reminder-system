@@ -67,7 +67,7 @@ def get_dose_logs(request, schedule_id):
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def mark_dose_taken(request, dose_id):
+def mark_dose_taken(request, medicationId):
     """
     Patient marks a dose as taken.
     """
@@ -78,13 +78,12 @@ def mark_dose_taken(request, dose_id):
         )
 
     try:
-        dose = DoseLog.objects.get(id=dose_id)
+        dose = DoseLog.objects.get(id=medicationId)
         dose.status   = 'taken'
         dose.taken_at = timezone.now()
         dose.save()
         return Response({
             'message': 'Dose marked as taken.',
-            'dose': DoseLogSerializer(dose).data
         }, status=status.HTTP_200_OK)
 
     except DoseLog.DoesNotExist:
@@ -92,3 +91,77 @@ def mark_dose_taken(request, dose_id):
             {'error': 'Dose not found.'},
             status=status.HTTP_404_NOT_FOUND
         )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_today_medications(request, id):
+    """
+    Get all medications scheduled for today for a specific patient.
+    """
+    from django.utils import timezone
+    from datetime import date
+
+    today = date.today()
+
+    # Get all schedules for this patient's prescriptions
+    schedules = MedicationSchedule.objects.filter(
+        prescription__patient__id=id
+    )
+
+    data = []
+    for schedule in schedules:
+        # Get today's dose logs for this schedule
+        today_doses = DoseLog.objects.filter(
+            schedule=schedule,
+            scheduled_time__date=today
+        )
+
+        for dose in today_doses:
+            data.append({
+                'id':            dose.id,
+                'name':          schedule.prescription.medication_name,
+                'time':          dose.scheduled_time.strftime('%I:%M %p'),
+                'scheduledTime': dose.scheduled_time,
+                'taken':         dose.status == 'taken',
+                'missed':        dose.status == 'missed',
+            })
+
+    return Response(data, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_patient_schedule(request, id):
+    """
+    Get the full medication schedule for a specific patient.
+    """
+    schedules = MedicationSchedule.objects.filter(
+        prescription__patient__id=id
+    )
+
+    data = []
+    for schedule in schedules:
+        dose_logs = DoseLog.objects.filter(schedule=schedule)
+        doses = []
+        for dose in dose_logs:
+            doses.append({
+                'id':            dose.id,
+                'scheduledTime': dose.scheduled_time,
+                'status':        dose.status,
+                'takenAt':       dose.taken_at,
+            })
+
+        data.append({
+            'scheduleId':     schedule.id,
+            'medication':     schedule.prescription.medication_name,
+            'dosage':         schedule.prescription.dosage,
+            'frequency':      schedule.frequency,
+            'duration':       schedule.duration,
+            'specificTimes':  schedule.specific_times,
+            'startDate':      schedule.start_date,
+            'endDate':        schedule.end_date,
+            'doses':          doses,
+        })
+
+    return Response(data, status=status.HTTP_200_OK)
