@@ -5,6 +5,7 @@ from rest_framework import status
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import User, PatientProfile
+from django.db.models import Q
 
 
 def get_tokens_for_user(user):
@@ -180,7 +181,9 @@ def search_patient(request, identifier):
         )
 
     try:
-        profile = PatientProfile.objects.get(matric_number=identifier)
+        profile = PatientProfile.objects.get(
+            Q(matric_number=identifier) | Q(phone_number=identifier)
+        )
         return Response({
             'id':                profile.user.id,
             'name':              profile.full_name,
@@ -205,11 +208,16 @@ def get_patient_prescriptions(request, id):
     """
     Get all prescriptions for a specific patient.
     """
-    if request.user.role not in ['doctor', 'pharmacist', 'admin']:
+    if request.user.role == 'patient' and request.user.id != id:
         return Response(
-            {'message': 'Access denied.'},
-            status=status.HTTP_403_FORBIDDEN
-        )
+        {'message': 'Access denied.'},
+        status=status.HTTP_403_FORBIDDEN
+    )
+    elif request.user.role not in ['doctor', 'pharmacist', 'admin', 'patient']:
+        return Response(
+        {'message': 'Access denied.'},
+        status=status.HTTP_403_FORBIDDEN
+    )
 
     try:
         from prescriptions.models import Prescription
