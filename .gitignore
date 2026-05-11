@@ -1,14 +1,4 @@
-# Virtual environment
-venv/
-backend/
-env/
-
-# Python
-__pycache__/
-*.pyc
-
-# Environment variables
-.env
-
-# VS Code
-.vscode/frontend/frontend/node_modules/
+frontend/frontend/node_modules/
+health_system/db.sqlite3
+.DS_Store
+build/
