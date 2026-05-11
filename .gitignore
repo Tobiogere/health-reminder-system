@@ -11,4 +11,4 @@ __pycache__/
 .env
 
 # VS Code
-.vscode/
+.vscode/frontend/frontend/node_modules/
