@@ -170,10 +170,17 @@ def logout(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def search_patient(request, identifier):
+def search_patient(request):
     """
-    Search patient by identifier.
+    Search patient by identifier (matric number or phone number).
     """
+    identifier = request.query_params.get('identifier', '')
+
+    if not identifier:
+        return Response(
+            {'message': 'identifier is required.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
     if request.user.role not in ['doctor', 'pharmacist', 'admin']:
         return Response(
             {'message': 'Access denied.'},
@@ -233,6 +240,7 @@ def get_patient_prescriptions(request, id):
                 'dosage':         p.dosage,
                 'status':         p.status,
                 'createdAt':      p.created_at,
+                'doctorName':     p.doctor.username if p.doctor else '',
             })
 
         return Response(data, status=status.HTTP_200_OK)
