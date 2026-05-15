@@ -98,26 +98,33 @@ def mark_dose_taken(request, medicationId):
 def get_today_medications(request, id):
     """
     Get all medications scheduled for today for a specific patient.
+    Also automatically marks overdue doses as missed.
     """
     from django.utils import timezone
-    from datetime import date
+    from datetime import date, timedelta
 
     today = date.today()
+    now   = timezone.now()
 
-    # Get all schedules for this patient's prescriptions
     schedules = MedicationSchedule.objects.filter(
         prescription__patient__id=id
     )
 
     data = []
     for schedule in schedules:
-        # Get today's dose logs for this schedule
         today_doses = DoseLog.objects.filter(
-            schedule=schedule,
+            schedule_id=schedule.id,
             scheduled_time__date=today
         )
 
         for dose in today_doses:
+            # Auto mark as missed if 90 minutes have passed
+            if dose.status == 'pending':
+                cutoff_time = dose.scheduled_time + timedelta(minutes=90)
+                if now > cutoff_time:
+                    dose.status = 'missed'
+                    dose.save()
+
             data.append({
                 'id':            dose.id,
                 'name':          schedule.prescription.medication_name,

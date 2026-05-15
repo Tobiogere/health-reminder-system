@@ -25,20 +25,21 @@ class MedicationSchedule(models.Model):
 class DoseLog(models.Model):
 
     class Status(models.TextChoices):
-        TAKEN  = 'taken',  'Taken'
-        MISSED = 'missed', 'Missed'
+        PENDING = 'pending', 'Pending'
+        TAKEN   = 'taken',   'Taken'
+        MISSED  = 'missed',  'Missed'
 
-    schedule       = models.ForeignKey(
+    schedule = models.ForeignKey(
         MedicationSchedule,
         on_delete=models.CASCADE,
         related_name='dose_logs'
     )
 
-    scheduled_time = models.DateTimeField()
+    scheduled_time = models.DateTimeField(blank=True, null=True)
     status         = models.CharField(
         max_length=10,
         choices=Status.choices,
-        default=Status.MISSED
+        default=Status.PENDING
     )
     taken_at       = models.DateTimeField(blank=True, null=True)
 
