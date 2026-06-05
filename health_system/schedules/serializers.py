@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 class MedicationScheduleSerializer(serializers.ModelSerializer):
 
     class Meta:
-        model  = MedicationSchedule
+        model = MedicationSchedule
         fields = [
             'id',
             'prescription',
@@ -23,7 +23,7 @@ class MedicationScheduleSerializer(serializers.ModelSerializer):
 class CreateScheduleSerializer(serializers.ModelSerializer):
 
     class Meta:
-        model  = MedicationSchedule
+        model = MedicationSchedule
         fields = [
             'prescription',
             'frequency',
@@ -35,14 +35,14 @@ class CreateScheduleSerializer(serializers.ModelSerializer):
     def validate(self, data):
         if len(data['specific_times']) != data['frequency']:
             raise serializers.ValidationError(
-                f"You said frequency is {data['frequency']} but provided {len(data['specific_times'])} times."
+                f"Frequency mismatch: expected {data['frequency']} times, got {len(data['specific_times'])}"
             )
         return data
 
     def create(self, validated_data):
         start_date = validated_data['start_date']
-        duration   = validated_data['duration']
-        end_date   = start_date + timedelta(days=duration)
+        duration = validated_data['duration']
+        end_date = start_date + timedelta(days=duration)
 
         schedule = MedicationSchedule.objects.create(
             **validated_data,
@@ -59,7 +59,8 @@ class CreateScheduleSerializer(serializers.ModelSerializer):
             current_date = start_date + timedelta(days=day)
 
             for time_str in schedule.specific_times:
-                hour, minute   = map(int, time_str.split(':'))
+                hour, minute = map(int, time_str.split(':'))
+
                 scheduled_time = datetime(
                     current_date.year,
                     current_date.month,
@@ -76,8 +77,10 @@ class CreateScheduleSerializer(serializers.ModelSerializer):
 
 class DoseLogSerializer(serializers.ModelSerializer):
 
+    status = serializers.SerializerMethodField()
+
     class Meta:
-        model  = DoseLog
+        model = DoseLog
         fields = [
             'id',
             'schedule',
@@ -86,3 +89,6 @@ class DoseLogSerializer(serializers.ModelSerializer):
             'taken_at',
         ]
         read_only_fields = ['id', 'scheduled_time', 'taken_at']
+
+    def get_status(self, obj):
+        return obj.get_effective_status()

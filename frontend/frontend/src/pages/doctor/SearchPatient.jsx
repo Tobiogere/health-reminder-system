@@ -34,7 +34,7 @@ const SearchPatient = () => {
 
     try {
       setSearching(true);
-      const res = await fetch(`http://127.0.0.1:8000/patients/${encodeURIComponent(query)}`, {
+      const res = await fetch(`http://127.0.0.1:8000/patients/search?identifier=${encodeURIComponent(query)}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type':  'application/json',

@@ -1,67 +1,33 @@
 import React, { createContext, useState, useEffect, useCallback } from 'react';
-// import { getNotifications, markNotificationRead, markAllRead } from '../services/notificationService';
 import useAuth from '../hooks/useAuth';
 
 export const NotificationContext = createContext(null);
 
+const API_URL = 'http://127.0.0.1:8000';
+
 export const NotificationProvider = ({ children }) => {
-  const { user } = useAuth();
+  const { user }                          = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading]             = useState(false);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const fetchNotifications = useCallback(async () => {
-    if (!user || user.role !== 'patient') return;
+    if (!user) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
     try {
       setLoading(true);
-      // TODO: Uncomment when backend is ready
-      // const data = await getNotifications();
-      // setNotifications(data);
-
-      // ── Dummy notifications for now ──
-      setNotifications([
-        {
-          id: 1,
-          type: 'reminder',
-          message: 'Time to take Paracetamol 500mg',
-          time: '08:00 AM',
-          drug: 'Paracetamol 500mg',
-          read: false,
-          missed: false,
-          createdAt: new Date().toISOString(),
+      const res = await fetch(`${API_URL}/notifications/`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type':  'application/json',
         },
-        {
-          id: 2,
-          type: 'missed',
-          message: 'You missed your Amoxicillin 250mg dose',
-          time: '08:00 AM',
-          drug: 'Amoxicillin 250mg',
-          read: false,
-          missed: true,
-          createdAt: new Date(Date.now() - 3600000).toISOString(),
-        },
-        {
-          id: 3,
-          type: 'reminder',
-          message: 'Time to take Vitamin C 1000mg',
-          time: '12:00 PM',
-          drug: 'Vitamin C 1000mg',
-          read: true,
-          missed: false,
-          createdAt: new Date(Date.now() - 7200000).toISOString(),
-        },
-        {
-          id: 4,
-          type: 'renewal',
-          message: 'Your renewal request has been approved',
-          time: null,
-          drug: null,
-          read: false,
-          missed: false,
-          createdAt: new Date(Date.now() - 10800000).toISOString(),
-        },
-      ]);
+      });
+      const data = await res.json();
+      if (res.ok && Array.isArray(data)) {
+        setNotifications(data);
+      }
     } catch (err) {
       console.error('Failed to fetch notifications:', err);
     } finally {
@@ -69,7 +35,6 @@ export const NotificationProvider = ({ children }) => {
     }
   }, [user]);
 
-  // Fetch on mount + poll every 60 seconds
   useEffect(() => {
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 60000);
@@ -77,15 +42,37 @@ export const NotificationProvider = ({ children }) => {
   }, [fetchNotifications]);
 
   const markAsRead = async (id) => {
-    // TODO: await markNotificationRead(id);
-    setNotifications(notifications.map(n =>
-      n.id === id ? { ...n, read: true } : n
-    ));
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`${API_URL}/notifications/${id}/read`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type':  'application/json',
+        },
+      });
+      setNotifications(prev => prev.map(n =>
+        n.id === id ? { ...n, read: true } : n
+      ));
+    } catch (err) {
+      console.error('Failed to mark notification read:', err);
+    }
   };
 
   const markAllAsRead = async () => {
-    // TODO: await markAllRead();
-    setNotifications(notifications.map(n => ({ ...n, read: true })));
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`${API_URL}/notifications/read-all`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type':  'application/json',
+        },
+      });
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    } catch (err) {
+      console.error('Failed to mark all read:', err);
+    }
   };
 
   const getMissedDoses = () => notifications.filter(n => n.missed && n.type === 'missed');

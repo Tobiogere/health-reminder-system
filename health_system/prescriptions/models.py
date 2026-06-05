@@ -1,12 +1,13 @@
 from django.db import models
 from django.conf import settings
 
-# Create your models here.
+
 class Prescription(models.Model):
-    class Status(models.TextChoices):
-        PENDING = 'pending', 'Pending'
-        ACTIVE    = 'active',    'Active'
-        COMPLETED = 'completed', 'Completed'
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('active', 'Active'),
+        ('missed', 'Missed'),
+    ]
 
     doctor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -20,17 +21,17 @@ class Prescription(models.Model):
         related_name='prescriptions_as_patient'
     )
 
-    diagnosis      = models.TextField()
+    diagnosis = models.TextField()
     medication_name = models.CharField(max_length=255)
-    dosage         = models.CharField(max_length=100)  # e.g. 500mg, 2 tablets
+    dosage = models.CharField(max_length=255, blank=True, null=True)
 
     status = models.CharField(
         max_length=20,
-        choices=Status.choices,
-        default=Status.PENDING
+        choices=STATUS_CHOICES,
+        default='pending'
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Prescription for {self.patient} by {self.doctor} — {self.medication_name}"
+        return f"Prescription for {self.patient} by {self.doctor} — {self.created_at}"

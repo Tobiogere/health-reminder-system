@@ -46,7 +46,7 @@ const DoctorPrescriptions = () => {
       (rx.patient_fullname || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (rx.patient_username || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (rx.diagnosis        || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (rx.medication_name  || '').toLowerCase().includes(searchQuery.toLowerCase());
+      (rx.medicationName  || '').toLowerCase().includes(searchQuery.toLowerCase());
     return matchesStatus && matchesSearch;
   });
 
@@ -174,11 +174,11 @@ const DoctorPrescriptions = () => {
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem', flexWrap: 'wrap' }}>
                         <span style={{ fontWeight: 700, fontSize: '0.92rem' }}>
-                          {rx.patient_fullname || rx.patient_username}
+                         {rx.patientName}
                         </span>
                       </div>
                       <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
-                        🩺 {rx.diagnosis} · 💊 {rx.medication_name} · 📅 {new Date(rx.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        🩺 {rx.diagnosis} · 💊 {rx.medicationName} · 📅 {new Date(rx.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </div>
                     </div>
 
@@ -217,7 +217,7 @@ const DoctorPrescriptions = () => {
                         fontSize: '0.82rem',
                       }}>
                         <div style={{ marginBottom: '0.4rem' }}>
-                          💊 <strong>Drug:</strong> {rx.medication_name}
+                          💊 <strong>Drug:</strong> {rx.medicationName}
                         </div>
                         <div style={{ marginBottom: '0.4rem' }}>
                           📦 <strong>Dosage:</strong> {rx.dosage || 'Pending pharmacist'}
@@ -226,10 +226,10 @@ const DoctorPrescriptions = () => {
                           🩺 <strong>Diagnosis:</strong> {rx.diagnosis}
                         </div>
                         <div style={{ marginBottom: '0.4rem' }}>
-                          👤 <strong>Patient:</strong> {rx.patient_fullname || rx.patient_username}
+                          👤 <strong>Patient:</strong>{rx.patientName}
                         </div>
                         <div>
-                          📅 <strong>Date:</strong> {new Date(rx.created_at).toLocaleDateString('en-GB', {
+                          📅 <strong>Date:</strong> {new Date(rx.createdAt).toLocaleDateString('en-GB', {
                             weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
                           })}
                         </div>

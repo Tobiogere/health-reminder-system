@@ -18,7 +18,7 @@ class PrescriptionSerializer(serializers.ModelSerializer):
             'patient_username',
             'patient_fullname',
             'diagnosis',
-            'medication_name',
+            'rx.createdAt',
             'dosage',
             'status',
             'created_at',
@@ -44,7 +44,7 @@ class CreatePrescriptionSerializer(serializers.ModelSerializer):
         fields = [
             'matric_number',
             'diagnosis',
-            'medication_name',
+            'rx.createdAt',
             'dosage',
         ]
 

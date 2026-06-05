@@ -55,7 +55,7 @@ const PrescriptionHistory = () => {
     return { bg: '#e2e3e5', text: '#41464b' };
   };
 
-  const uniqueDoctors = [...new Set(prescriptions.map(p => p.doctor_username))].length;
+  const uniqueDoctors = [...new Set(prescriptions.map(p => p.doctorName))].length;
 
   return (
     <PageWrapper
@@ -162,10 +162,10 @@ const PrescriptionHistory = () => {
                           🩺 {rx.diagnosis}
                         </div>
                         <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
-                          👨‍⚕️ {rx.doctor_username} · {new Date(rx.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          👨‍⚕️ {rx.doctorName || 'Health Centre'} · {new Date(rx.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </div>
                         <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
-                          💊 {rx.medication_name} {rx.dosage ? `· ${rx.dosage}` : ''}
+                          💊 {rx.medicationName} {rx.dosage ? `· ${rx.dosage}` : ''}
                         </div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -200,7 +200,7 @@ const PrescriptionHistory = () => {
                           fontSize: '0.82rem',
                         }}>
                           <div style={{ marginBottom: '0.4rem' }}>
-                            💊 <strong>Drug:</strong> {rx.medication_name}
+                            💊 <strong>Drug:</strong> {rx.medicationName}
                           </div>
                           <div style={{ marginBottom: '0.4rem' }}>
                             📦 <strong>Dosage:</strong> {rx.dosage || 'Pending pharmacist'}
@@ -209,10 +209,10 @@ const PrescriptionHistory = () => {
                             🩺 <strong>Diagnosis:</strong> {rx.diagnosis}
                           </div>
                           <div style={{ marginBottom: '0.4rem' }}>
-                            👨‍⚕️ <strong>Doctor:</strong> {rx.doctor_username}
+                            👨‍⚕️ <strong>Doctor:</strong> {rx.doctorName || 'Health Centre'}
                           </div>
                           <div>
-                            📅 <strong>Date:</strong> {new Date(rx.created_at).toLocaleDateString('en-GB', {
+                            📅 <strong>Date:</strong> {new Date(rx.createdAt).toLocaleDateString('en-GB', {
                               weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
                             })}
                           </div>

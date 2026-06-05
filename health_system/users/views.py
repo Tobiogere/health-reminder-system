@@ -147,7 +147,8 @@ def login(request):
         user_data['patientType'] = profile.patient_type
         user_data['department']  = profile.department
         user_data['identifier']  = profile.matric_number
-
+        user_data['phone'] = profile.phone_number or ''
+        
     token = get_tokens_for_user(user)
 
     return Response({

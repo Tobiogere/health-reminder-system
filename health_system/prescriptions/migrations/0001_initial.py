@@ -19,7 +19,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('diagnosis', models.TextField()),
-                ('medication_name', models.CharField(max_length=255)),
+                ('rx.createdAt', models.CharField(max_length=255)),
                 ('dosage', models.CharField(max_length=100)),
                 ('status', models.CharField(choices=[('pending', 'Pending'), ('active', 'Active'), ('completed', 'Completed')], default='pending', max_length=20)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),

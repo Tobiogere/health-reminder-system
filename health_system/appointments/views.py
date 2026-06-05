@@ -82,7 +82,7 @@ def get_renewals(request):
             'id':          a.id,
             'patientName': patient_name,
             'patientId':   patient_id,
-            'drug':        a.prescription.medication_name,
+            'drug':        a.prescription.rx.createdAt,
             'note':        a.notes,
             'requestDate': a.created_at,
             'status':      a.status,
