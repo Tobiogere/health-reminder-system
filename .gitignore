@@ -4,3 +4,5 @@ health_system/db.sqlite3
 build/
 __pycache__/
 *.pyc
+__pycache__/
+*.pyc
