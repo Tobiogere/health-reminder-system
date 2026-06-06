@@ -133,7 +133,7 @@ def login(request):
     # Build user info for response
     user_data = {
         'id': user.id,
-        'name': user.username,
+        'name': user.first_name or user.username,
         'role': user.role,
         'identifier': user.username,
         'patientType': None,
@@ -149,6 +149,9 @@ def login(request):
         user_data['identifier']  = profile.matric_number
         user_data['phone'] = profile.phone_number or ''
         
+    # For non-patient users, get phone from user model
+    if not hasattr(user, 'patient_profile'):
+        user_data['phone'] = user.phone_number or ''
     token = get_tokens_for_user(user)
 
     return Response({
@@ -273,8 +276,10 @@ def update_profile(request):
     except:
         # For non-patient users (doctors, pharmacists)
         if full_name:
-            request.user.username = full_name
-            request.user.save()
+            request.user.first_name = full_name
+        if phone:
+            request.user.phone_number = phone
+        request.user.save()
 
     return Response(
         {'message': 'Profile updated successfully.'},
