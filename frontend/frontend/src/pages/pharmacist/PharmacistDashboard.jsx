@@ -31,7 +31,7 @@ const groupQueue = (queue) => {
     if (rx.status === 'pending') groups[key].status = 'pending';
 
     // const key = `${rx.patientId}-${rx.diagnosis}-${date}`;
-console.log('Key:', key, '| Drug:', rx.medicationName);
+// console.log('Key:', key, '| Drug:', rx.medicationName);
   });
 
   
