@@ -60,14 +60,26 @@ const Register = () => {
     }
     try {
       setLoading(true);
-      // TODO: Replace with real API call
-      // await registerUser(formData);
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setSuccess(true);
       setError('');
+  
+      const response = await fetch('http://127.0.0.1:8000/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+  
+      const data = await response.json();
+  
+      if (!response.ok) {
+        setError(data.message || 'Registration failed. Please try again.');
+        return;
+      }
+  
+      setSuccess(true);
       setTimeout(() => navigate('/login'), 2000);
+  
     } catch (err) {
-      setError(err.response?.data?.message || 'Registration failed. Please try again.');
+      setError('Could not connect to server. Please try again.');
     } finally {
       setLoading(false);
     }

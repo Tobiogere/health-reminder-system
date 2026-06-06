@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import useAuth from '../hooks/useAuth';
-// import { loginUser } from '../services/authService';
+// import api from '../services/api';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -11,7 +11,7 @@ const Login = () => {
     role: '',
   });
   const [error, setError] = useState('');
-  // const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -31,35 +31,39 @@ const handleSubmit = async (e) => {
     return;
   }
 
-  // TODO: Replace with real API call when backend is ready
-  // try {
-  //   setLoading(true);
-  //   const data = await loginUser(identifier, password, role);
-  //   localStorage.setItem('token', data.token);
-  //   localStorage.setItem('user', JSON.stringify(data.user));
-  //   login(data.user);
-  // } catch (err) {
-  //   setError(err.response?.data?.message || 'Invalid credentials.');
-  //   return;
-  // } finally {
-  //   setLoading(false);
-  // }
+  try {
+    setLoading(true);
+    const response = await fetch('http://127.0.0.1:8000/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier, password, role }),
+    });
 
-  // Temporary — simulate login until backend is ready
-  login({
-    name: 'Test User',
-    role: role,
-    identifier: identifier,
-  });
+    const data = await response.json();
 
-  const dashboards = {
-    patient:    '/patient/dashboard',
-    doctor:     '/doctor/dashboard',
-    pharmacist: '/pharmacist/dashboard',
-    admin:      '/admin/dashboard',
-  };
+    if (!response.ok) {
+      setError(data.message || 'Invalid credentials.');
+      return;
+    }
 
-  navigate(dashboards[role]);
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    login(data.user);
+
+    const dashboards = {
+      patient:    '/patient/dashboard',
+      doctor:     '/doctor/dashboard',
+      pharmacist: '/pharmacist/dashboard',
+      admin:      '/admin/dashboard',
+    };
+
+    navigate(dashboards[data.user.role]);
+
+  } catch (err) {
+    setError('Could not connect to server. Please try again.');
+  } finally {
+    setLoading(false);
+  }
 };
 
   const getIdentifierLabel = () => {
@@ -160,8 +164,13 @@ const handleSubmit = async (e) => {
           )}
 
           {/* Submit */}
-          <button type="submit" className="btn-primary-custom" style={{ padding: '0.55rem' }}>
-            Login
+          <button 
+            type="submit" 
+            className="btn-primary-custom" 
+            style={{ padding: '0.55rem' }}
+            disabled={loading}
+          >
+            {loading ? 'Logging in...' : 'Login'}
           </button>
 
           {/* Link to Register */}
