@@ -28,6 +28,7 @@ urlpatterns = [
     path('prescriptions/', include('prescriptions.urls')),
     path('renewals/', include('appointments.urls')),
     path('medications/', include('schedules.medication_urls')),
+    path('schedules/', include('schedules.urls')),
     path('users/', include('users.profile_urls')),
     path('notifications/', include('notifications.urls')),
     path('admin-panel/', include('users.admin_urls')),

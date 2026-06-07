@@ -6,4 +6,5 @@ urlpatterns = [
     path('<int:prescription_id>/', views.get_schedule, name='get_schedule'),
     path('dose-logs/<int:schedule_id>/', views.get_dose_logs, name='get_dose_logs'),
     path('dose/<int:dose_id>/taken/', views.mark_dose_taken, name='mark_dose_taken'),
+    path('missed-doses/', views.get_missed_doses_for_doctor, name='get_missed_doses_for_doctor'),
 ]

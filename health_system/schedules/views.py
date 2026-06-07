@@ -201,3 +201,42 @@ def get_patient_schedule(request, id):
         })
 
     return Response(data, status=status.HTTP_200_OK)
+
+# -----------------------------
+# MISSED DOSES FOR DOCTOR
+# -----------------------------
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_missed_doses_for_doctor(request):
+    if request.user.role != 'doctor':
+        return Response({'error': 'Access denied.'}, status=status.HTTP_403_FORBIDDEN)
+
+    missed = DoseLog.objects.filter(
+        status='missed',
+        schedule__prescription__doctor=request.user
+    ).select_related(
+        'schedule__prescription__patient__patient_profile'
+    ).order_by('-scheduled_time')
+
+    data = []
+    for dose in missed:
+        prescription = dose.schedule.prescription
+        patient = prescription.patient
+        try:
+            patient_name = patient.patient_profile.full_name
+            patient_id   = patient.patient_profile.matric_number
+        except:
+            patient_name = patient.username
+            patient_id   = patient.id
+
+        data.append({
+            'doseId':       dose.id,
+            'patientName':  patient_name,
+            'patientId':    patient_id,
+            'drug':         prescription.medication_name,
+            'scheduledTime': dose.scheduled_time,
+            'missedAt':     dose.scheduled_time.strftime('%I:%M %p'),
+            'date':         dose.scheduled_time.date(),
+        })
+
+    return Response(data, status=status.HTTP_200_OK)

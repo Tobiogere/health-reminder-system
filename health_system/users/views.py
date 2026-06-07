@@ -267,6 +267,8 @@ def update_profile(request):
     data      = request.data
     full_name = data.get('fullName')
     phone     = data.get('phone')
+    caregiver_email = data.get('caregiverEmail')
+    caregiver_name  = data.get('caregiverName')
 
     try:
         profile = request.user.patient_profile
@@ -275,6 +277,10 @@ def update_profile(request):
         if phone:
             profile.phone_number = phone
         profile.save()
+        if caregiver_email:
+            profile.caregiver_email = caregiver_email
+        if caregiver_name:
+            profile.caregiver_name = caregiver_name
     except:
         # For non-patient users (doctors, pharmacists)
         if full_name:

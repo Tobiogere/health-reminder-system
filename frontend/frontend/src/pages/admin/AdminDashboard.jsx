@@ -310,7 +310,7 @@ const AdminDashboard = () => {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
                     <thead>
                       <tr style={{ backgroundColor: '#f8f9fa' }}>
-                        {['Patient', 'Doctor', 'Diagnosis', 'Drug', 'Dosage', 'Date', 'Status'].map(h => (
+                        {['Patient ID', 'Doctor', 'Drug', 'Date', 'Status'].map(h => (
                           <th key={h} style={{ padding: '0.6rem 0.75rem', fontWeight: 600, color: 'var(--muted)', borderBottom: '1px solid #e9ecef', whiteSpace: 'nowrap', textAlign: 'left' }}>{h}</th>
                         ))}
                       </tr>
@@ -318,11 +318,9 @@ const AdminDashboard = () => {
                     <tbody>
                       {prescriptions.map(rx => (
                         <tr key={rx.id} style={{ borderBottom: '1px solid #e9ecef' }}>
-                          <td style={{ padding: '0.65rem 0.75rem', fontWeight: 600 }}>{rx.patientName}</td>
+                          <td style={{ padding: '0.65rem 0.75rem', fontWeight: 600 }}>Patient #{rx.patientId}</td>
                           <td style={{ padding: '0.65rem 0.75rem' }}>{rx.doctorName || '—'}</td>
-                          <td style={{ padding: '0.65rem 0.75rem' }}>{rx.diagnosis}</td>
                           <td style={{ padding: '0.65rem 0.75rem', color: 'var(--muted)' }}>{rx.medicationName}</td>
-                          <td style={{ padding: '0.65rem 0.75rem', color: 'var(--muted)' }}>{rx.dosage || '—'}</td>
                           <td style={{ padding: '0.65rem 0.75rem', whiteSpace: 'nowrap' }}>
                             {new Date(rx.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                           </td>
@@ -358,9 +356,9 @@ const AdminDashboard = () => {
                     flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.85rem',
                   }}>
                     <div>
-                      <div style={{ fontWeight: 600 }}>{r.patientName}</div>
+                      <div style={{ fontWeight: 600 }}>Patient #{r.patientId}</div>
                       <div style={{ color: 'var(--muted)', fontSize: '0.78rem' }}>
-                        💊 {r.drug} · {new Date(r.requestDate).toLocaleDateString('en-GB')}
+                        📅 {new Date(r.requestDate).toLocaleDateString('en-GB')}
                       </div>
                       {r.note && <div style={{ color: 'var(--muted)', fontSize: '0.75rem', fontStyle: 'italic' }}>📝 {r.note}</div>}
                     </div>

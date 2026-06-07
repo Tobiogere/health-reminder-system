@@ -14,8 +14,10 @@ const Profile = () => {
   const fileInputRef                  = useRef(null);
 
   const [formData, setFormData] = useState({
-    fullName:        user?.name  || '',
-    phone:           user?.phone || '',
+    fullName:        user?.name           || '',
+    phone:           user?.phone          || '',
+    caregiverName:   user?.caregiverName  || '',
+    caregiverEmail:  user?.caregiverEmail || '',
     currentPassword: '',
     newPassword:     '',
     confirmPassword: '',
@@ -40,31 +42,18 @@ const Profile = () => {
   const handlePictureChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    if (!file.type.startsWith('image/')) { setError('Please select an image file.'); return; }
+    if (file.size > 5 * 1024 * 1024) { setError('Image must be less than 5MB.'); return; }
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      setError('Please select an image file.');
-      return;
-    }
-
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Image must be less than 5MB.');
-      return;
-    }
-
-    // Show preview
     const reader = new FileReader();
     reader.onload = (e) => setPreviewPic(e.target.result);
     reader.readAsDataURL(file);
 
-    // Upload to backend
     try {
       setPicLoading(true);
       setError('');
       const formDataObj = new FormData();
       formDataObj.append('profile_picture', file);
-
       const res = await fetch('http://127.0.0.1:8000/users/profile/picture', {
         method: 'PATCH',
         headers: { 'Authorization': `Bearer ${token}` },
@@ -94,11 +83,22 @@ const Profile = () => {
       const res = await fetch('http://127.0.0.1:8000/users/profile', {
         method: 'PATCH',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fullName: formData.fullName, phone: formData.phone }),
+        body: JSON.stringify({
+          fullName:       formData.fullName,
+          phone:          formData.phone,
+          caregiverName:  formData.caregiverName,
+          caregiverEmail: formData.caregiverEmail,
+        }),
       });
       const data = await res.json();
       if (res.ok) {
-        const updatedUser = { ...user, name: formData.fullName, phone: formData.phone };
+        const updatedUser = {
+          ...user,
+          name:           formData.fullName,
+          phone:          formData.phone,
+          caregiverName:  formData.caregiverName,
+          caregiverEmail: formData.caregiverEmail,
+        };
         localStorage.setItem('user', JSON.stringify(updatedUser));
         login(updatedUser);
         setSuccess('Profile updated successfully.');
@@ -168,19 +168,13 @@ const Profile = () => {
                   {user?.name?.charAt(0).toUpperCase()}
                 </div>
               )}
-
-              {/* Camera button */}
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={picLoading}
-                style={{
-                  position: 'absolute', bottom: 0, right: 0,
-                  width: '28px', height: '28px', borderRadius: '50%',
-                  backgroundColor: roleColor, color: '#fff',
-                  border: '2px solid #fff', cursor: 'pointer',
-                  fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}
-              >
+              <button onClick={() => fileInputRef.current?.click()} disabled={picLoading} style={{
+                position: 'absolute', bottom: 0, right: 0,
+                width: '28px', height: '28px', borderRadius: '50%',
+                backgroundColor: roleColor, color: '#fff',
+                border: '2px solid #fff', cursor: 'pointer',
+                fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
                 {picLoading ? '⏳' : '📷'}
               </button>
               <input ref={fileInputRef} type="file" accept="image/*"
@@ -198,8 +192,8 @@ const Profile = () => {
               {user?.patientType && <div style={{ textTransform: 'capitalize' }}>👤 {user.patientType} Patient</div>}
               {user?.department  && <div>🏫 {user.department}</div>}
               {user?.phone       && <div>📞 {user.phone}</div>}
+              {user?.caregiverName && <div>👨‍👩‍👦 {user.caregiverName}</div>}
             </div>
-
             <p style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: '1rem', marginBottom: 0 }}>
               Click 📷 to change your profile picture
             </p>
@@ -243,7 +237,7 @@ const Profile = () => {
                   <input type="tel" name="phone" className="form-control form-control-sm"
                     value={formData.phone} onChange={handleChange} placeholder="e.g. 08012345678" />
                 </div>
-                <div className="mb-4">
+                <div className="mb-3">
                   <label className="form-label fw-semibold" style={{ fontSize: '0.88rem' }}>ID / Identifier</label>
                   <input type="text" className="form-control form-control-sm"
                     value={user?.identifier || ''} readOnly style={{ backgroundColor: '#f8f9fa' }} />
@@ -251,6 +245,32 @@ const Profile = () => {
                     ID cannot be changed. Contact admin if needed.
                   </small>
                 </div>
+
+                {/* Caregiver fields — patients only */}
+                {user?.role === 'patient' && (
+                  <>
+                    <hr style={{ margin: '1rem 0' }} />
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--muted)' }}>
+                      👨‍👩‍👦 Caregiver Information
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label fw-semibold" style={{ fontSize: '0.88rem' }}>Caregiver Name</label>
+                      <input type="text" name="caregiverName" className="form-control form-control-sm"
+                        value={formData.caregiverName} onChange={handleChange}
+                        placeholder="e.g. Mrs. Moradeyo (Mother)" />
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label fw-semibold" style={{ fontSize: '0.88rem' }}>Caregiver Email</label>
+                      <input type="email" name="caregiverEmail" className="form-control form-control-sm"
+                        value={formData.caregiverEmail} onChange={handleChange}
+                        placeholder="e.g. caregiver@email.com" />
+                      <small style={{ color: 'var(--muted)', fontSize: '0.75rem' }}>
+                        This person will be emailed if you miss a dose.
+                      </small>
+                    </div>
+                  </>
+                )}
+
                 <button type="submit" disabled={loading} style={{
                   backgroundColor: roleColor, color: '#fff', border: 'none',
                   borderRadius: '6px', padding: '0.5rem 1.5rem',
