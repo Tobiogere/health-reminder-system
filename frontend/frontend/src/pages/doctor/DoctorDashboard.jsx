@@ -4,7 +4,6 @@ import NewPrescription from './NewPrescription';
 import MissedDoseAlert from '../../components/MissedDoseAlert';
 import PageWrapper from '../../components/PageWrapper';
 
-// ── Group prescriptions by patient + diagnosis + date ──
 const groupPrescriptions = (prescriptions) => {
   const groups = {};
   prescriptions.forEach(rx => {
@@ -22,14 +21,8 @@ const groupPrescriptions = (prescriptions) => {
         drugs:       [],
       };
     }
-    groups[key].drugs.push({
-      id:             rx.id,
-      medicationName: rx.medicationName,
-      status:         rx.status,
-    });
-    // If any drug is pending, group is pending
+    groups[key].drugs.push({ id: rx.id, medicationName: rx.medicationName, status: rx.status });
     if (rx.status === 'pending') groups[key].status = 'pending';
-    // If any drug is active, group is active (unless pending)
     if (rx.status === 'active' && groups[key].status !== 'pending') groups[key].status = 'active';
   });
   return Object.values(groups);
@@ -94,30 +87,52 @@ const DoctorDashboard = () => {
   };
 
   const handlePrescriptionSubmit = async (prescriptionData) => {
+    const savedToken = localStorage.getItem('token');
+    const savedSearchResult = searchResult;
+
     try {
-      const res = await fetch('http://127.0.0.1:8000/prescriptions/', {
+      // Step 1 — Submit prescription
+      const prescRes = await fetch('http://127.0.0.1:8000/prescriptions/', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${savedToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          patientId:  searchResult.id,
+          patientId:  savedSearchResult.id,
           diagnosis:  prescriptionData.diagnosis,
           drugs:      prescriptionData.drugs,
           notes:      prescriptionData.notes,
           doctorName: user?.name,
         }),
       });
-      const data = await res.json();
-      if (res.ok) {
-        setSelectedPatient(null);
-        setSearchResult(null);
-        setSearchQuery('');
-        fetchPrescriptions();
-        alert(`Prescription for ${prescriptionData.patientName} sent to pharmacy successfully.`);
-      } else {
-        alert(data.message || 'Failed to submit prescription.');
+
+      if (!prescRes.ok) {
+        const errData = await prescRes.json();
+        alert(errData.message || 'Failed to submit prescription.');
+        return;
       }
+
+      // Step 2 — Suggest custom drugs to admin
+      const customDrugs = prescriptionData.customDrugs || [];
+
+      if (customDrugs.length > 0) {
+        for (let i = 0; i < customDrugs.length; i++) {
+          const drugName = customDrugs[i];
+          await fetch('http://127.0.0.1:8000/drugs/suggest', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${savedToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ drugName: drugName }),
+          });
+        }
+      }
+
+      // Step 3 — Reset and refresh
+      setSelectedPatient(null);
+      setSearchResult(null);
+      setSearchQuery('');
+      fetchPrescriptions();
+      alert(`Prescription for ${prescriptionData.patientName} sent to pharmacy successfully.`);
+
     } catch (err) {
-      alert('Could not connect to server. Please try again.');
+      alert(`Error: ${err.message}`);
     }
   };
 
@@ -137,30 +152,24 @@ const DoctorDashboard = () => {
   const grouped      = groupPrescriptions(prescriptions);
   const pendingCount = grouped.filter(g => g.status === 'pending').length;
   const activeCount  = grouped.filter(g => g.status === 'active').length;
-  const todayCount   = grouped.filter(g => {
-    return new Date(g.createdAt).toDateString() === new Date().toDateString();
-  }).length;
+  const todayCount   = grouped.filter(g => new Date(g.createdAt).toDateString() === new Date().toDateString()).length;
 
   return (
     <PageWrapper sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} onCloseSidebar={() => setSidebarOpen(false)}>
 
       <div className="mb-4">
-        <h2 style={{ fontWeight: 700, fontSize: '1.3rem', marginBottom: '0.2rem' }}>
-          Welcome, {user?.name} 👨‍⚕️
-        </h2>
+        <h2 style={{ fontWeight: 700, fontSize: '1.3rem', marginBottom: '0.2rem' }}>Welcome, {user?.name} 👨‍⚕️</h2>
         <p style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>{today}</p>
       </div>
 
-      {/* Missed Dose Alerts — now compact & collapsible */}
       <MissedDoseAlert />
 
-      {/* Summary Cards */}
       <div className="row g-3 mb-4">
         {[
-          { label: 'Prescriptions Today', value: todayCount,       color: '#198754' },
-          { label: 'Total Prescriptions', value: grouped.length,   color: '#C9A84C' },
-          { label: 'Pending Pharmacy',    value: pendingCount,     color: '#6f42c1' },
-          { label: 'Active',              value: activeCount,      color: '#fd7e14' },
+          { label: 'Prescriptions Today', value: todayCount,     color: '#198754' },
+          { label: 'Total Prescriptions', value: grouped.length, color: '#C9A84C' },
+          { label: 'Pending Pharmacy',    value: pendingCount,   color: '#6f42c1' },
+          { label: 'Active',              value: activeCount,    color: '#fd7e14' },
         ].map(s => (
           <div key={s.label} className="col-6 col-md-3">
             <div className="card-custom text-center" style={{ padding: '1rem' }}>
@@ -171,16 +180,14 @@ const DoctorDashboard = () => {
         ))}
       </div>
 
-      {/* Patient Search */}
       <div className="card-custom mb-4">
         <h5 style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '1rem' }}>🔍 Search Patient</h5>
         <form onSubmit={handleSearch}>
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <input
-              type="text" className="form-control form-control-sm"
+            <input type="text" className="form-control form-control-sm"
               placeholder="Enter Matric Number or Staff ID"
               value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setSearchError(''); setSearchResult(null); }}
+              onChange={e => { setSearchQuery(e.target.value); setSearchError(''); setSearchResult(null); }}
               style={{ flex: 1, minWidth: '200px' }}
             />
             <button type="submit" disabled={searching} style={{
@@ -224,7 +231,6 @@ const DoctorDashboard = () => {
         )}
       </div>
 
-      {/* Grouped Prescriptions */}
       <div className="card-custom">
         <h5 style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '1rem' }}>📋 My Prescriptions</h5>
         {loadingPrescriptions ? (
@@ -242,37 +248,33 @@ const DoctorDashboard = () => {
               border: `1px solid ${group.status === 'pending' ? '#ffc107' : group.status === 'active' ? '#b7ebc8' : '#e9ecef'}`,
               backgroundColor: group.status === 'pending' ? '#fffdf0' : group.status === 'active' ? '#f0fff4' : '#fff',
             }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.3rem', flexWrap: 'wrap' }}>
-                    <span style={{ fontWeight: 700, fontSize: '0.92rem' }}>{group.patientName}</span>
-                    <span style={{
-                      fontSize: '0.72rem', fontWeight: 600, padding: '0.15rem 0.5rem',
-                      borderRadius: '999px',
-                      backgroundColor: group.status === 'pending' ? '#fff3cd' : group.status === 'active' ? '#d1e7dd' : '#e2e3e5',
-                      color: group.status === 'pending' ? '#856404' : group.status === 'active' ? '#0f5132' : '#41464b',
-                      textTransform: 'capitalize',
-                    }}>{group.status}</span>
-                  </div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginBottom: '0.3rem' }}>
-                    📅 {group.date} &nbsp;·&nbsp; 🩺 {group.diagnosis}
-                  </div>
-                  {/* All drugs listed */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.4rem' }}>
-                    {group.drugs.map((drug, i) => (
-                      <div key={drug.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem' }}>
-                        <span style={{
-                          width: '20px', height: '20px', borderRadius: '50%', flexShrink: 0,
-                          backgroundColor: drug.status === 'pending' ? '#fff3cd' : '#d1e7dd',
-                          color: drug.status === 'pending' ? '#856404' : '#0f5132',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: '0.65rem', fontWeight: 700,
-                        }}>{i + 1}</span>
-                        <span>💊 {drug.medicationName}</span>
-                        {drug.status === 'active' && <span style={{ fontSize: '0.72rem', color: '#198754', fontWeight: 600 }}>✅</span>}
-                      </div>
-                    ))}
-                  </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.3rem', flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.92rem' }}>{group.patientName}</span>
+                  <span style={{
+                    fontSize: '0.72rem', fontWeight: 600, padding: '0.15rem 0.5rem', borderRadius: '999px',
+                    backgroundColor: group.status === 'pending' ? '#fff3cd' : group.status === 'active' ? '#d1e7dd' : '#e2e3e5',
+                    color: group.status === 'pending' ? '#856404' : group.status === 'active' ? '#0f5132' : '#41464b',
+                    textTransform: 'capitalize',
+                  }}>{group.status}</span>
+                </div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginBottom: '0.3rem' }}>
+                  📅 {group.date} &nbsp;·&nbsp; 🩺 {group.diagnosis}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.4rem' }}>
+                  {group.drugs.map((drug, i) => (
+                    <div key={drug.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem' }}>
+                      <span style={{
+                        width: '20px', height: '20px', borderRadius: '50%', flexShrink: 0,
+                        backgroundColor: drug.status === 'pending' ? '#fff3cd' : '#d1e7dd',
+                        color: drug.status === 'pending' ? '#856404' : '#0f5132',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '0.65rem', fontWeight: 700,
+                      }}>{i + 1}</span>
+                      <span>💊 {drug.medicationName}</span>
+                      {drug.status === 'active' && <span style={{ fontSize: '0.72rem', color: '#198754', fontWeight: 600 }}>✅</span>}
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
