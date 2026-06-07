@@ -24,13 +24,12 @@ class Command(BaseCommand):
             dose.save()
 
             try:
-                patient = dose.schedule.prescription.patient
+                patient  = dose.schedule.prescription.patient
                 med_name = dose.schedule.prescription.medication_name
                 scheduled_time = dose.scheduled_time.astimezone(
                     timezone.get_current_timezone()
                 ).strftime('%I:%M %p')
 
-                # Create notification
                 already_exists = Notification.objects.filter(
                     user=patient, type='missed', drug=med_name,
                     time=scheduled_time, created_at__date=now.date(),
@@ -45,15 +44,18 @@ class Command(BaseCommand):
                     )
                     count += 1
 
-                    # Send caregiver email if set
+                    # Send caregiver email — read from User model
+                    caregiver_email = patient.caregiver_email
+                    caregiver_name  = patient.caregiver_name or 'Caregiver'
                     try:
-                        profile = patient.patient_profile
-                        if profile.caregiver_email:
-                            patient_name = profile.full_name
-                            caregiver_name = profile.caregiver_name or 'Caregiver'
-                            send_mail(
-                                subject=f'Missed Dose Alert — {patient_name}',
-                                message=f"""Dear {caregiver_name},
+                        patient_name = patient.patient_profile.full_name
+                    except:
+                        patient_name = patient.username
+
+                    if caregiver_email:
+                        send_mail(
+                            subject=f'Missed Dose Alert — {patient_name}',
+                            message=f"""Dear {caregiver_name},
 
 This is an automated alert from the Redeemer's University Health Centre Medication Reminder System.
 
@@ -65,13 +67,13 @@ If this is an emergency, please contact the Health Centre immediately.
 
 — RUN Med Reminder System
 Redeemer's University Health Centre""",
-                                from_email=None,
-                                recipient_list=[profile.caregiver_email],
-                                fail_silently=True,
-                            )
-                            self.stdout.write(f'Caregiver email sent to {profile.caregiver_email}')
-                    except Exception as e:
-                        self.stdout.write(f'Could not send caregiver email: {e}')
+                            from_email=None,
+                            recipient_list=[caregiver_email],
+                            fail_silently=False,
+                        )
+                        self.stdout.write(f'Caregiver email sent to {caregiver_email}')
+                    else:
+                        self.stdout.write(f'No caregiver email for {patient.username}')
 
                     self.stdout.write(f'Missed dose: {patient.username} — {med_name}')
             except Exception as e:

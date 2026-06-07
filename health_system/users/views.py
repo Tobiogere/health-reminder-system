@@ -149,6 +149,8 @@ def login(request):
         user_data['identifier']  = profile.matric_number
         user_data['phone'] = profile.phone_number or ''
         user_data['profilePicture'] = request.build_absolute_uri(user.profile_picture.url) if user.profile_picture else None
+        user_data['caregiverEmail'] = user.caregiver_email or ''
+        user_data['caregiverName']  = user.caregiver_name or ''
         
     # For non-patient users, get phone from user model
     if not hasattr(user, 'patient_profile'):
@@ -277,10 +279,12 @@ def update_profile(request):
         if phone:
             profile.phone_number = phone
         profile.save()
-        if caregiver_email:
-            profile.caregiver_email = caregiver_email
-        if caregiver_name:
-            profile.caregiver_name = caregiver_name
+        # Save caregiver info to User model
+        if caregiver_email is not None:
+            request.user.caregiver_email = caregiver_email
+        if caregiver_name is not None:
+            request.user.caregiver_name = caregiver_name
+        request.user.save()
     except:
         # For non-patient users (doctors, pharmacists)
         if full_name:
