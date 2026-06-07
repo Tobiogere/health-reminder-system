@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import useAuth from '../hooks/useAuth';
 import PageWrapper from '../components/PageWrapper';
 
@@ -7,8 +7,11 @@ const Profile = () => {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
   const [activeTab, setActiveTab]     = useState('info');
   const [loading, setLoading]         = useState(false);
+  const [picLoading, setPicLoading]   = useState(false);
   const [error, setError]             = useState('');
   const [success, setSuccess]         = useState('');
+  const [previewPic, setPreviewPic]   = useState(user?.profilePicture || null);
+  const fileInputRef                  = useRef(null);
 
   const [formData, setFormData] = useState({
     fullName:        user?.name  || '',
@@ -34,28 +37,67 @@ const Profile = () => {
     setSuccess('');
   };
 
-  const handleUpdateInfo = async (e) => {
-    e.preventDefault();
-    if (!formData.fullName.trim()) {
-      setError('Full name cannot be empty.');
+  const handlePictureChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file.');
       return;
     }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image must be less than 5MB.');
+      return;
+    }
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = (e) => setPreviewPic(e.target.result);
+    reader.readAsDataURL(file);
+
+    // Upload to backend
+    try {
+      setPicLoading(true);
+      setError('');
+      const formDataObj = new FormData();
+      formDataObj.append('profile_picture', file);
+
+      const res = await fetch('http://127.0.0.1:8000/users/profile/picture', {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formDataObj,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const updatedUser = { ...user, profilePicture: data.url };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        login(updatedUser);
+        setSuccess('Profile picture updated!');
+      } else {
+        setError(data.message || 'Failed to upload picture.');
+      }
+    } catch (err) {
+      setError('Could not connect to server.');
+    } finally {
+      setPicLoading(false);
+    }
+  };
+
+  const handleUpdateInfo = async (e) => {
+    e.preventDefault();
+    if (!formData.fullName.trim()) { setError('Full name cannot be empty.'); return; }
     try {
       setLoading(true);
       const res = await fetch('http://127.0.0.1:8000/users/profile', {
         method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type':  'application/json',
-        },
-        body: JSON.stringify({
-          fullName: formData.fullName,
-          phone:    formData.phone,
-        }),
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fullName: formData.fullName, phone: formData.phone }),
       });
       const data = await res.json();
       if (res.ok) {
-        // Update localStorage with new name and phone
         const updatedUser = { ...user, name: formData.fullName, phone: formData.phone };
         localStorage.setItem('user', JSON.stringify(updatedUser));
         login(updatedUser);
@@ -76,19 +118,12 @@ const Profile = () => {
     if (!formData.newPassword)     { setError('Please enter a new password.'); return; }
     if (formData.newPassword.length < 6) { setError('New password must be at least 6 characters.'); return; }
     if (formData.newPassword !== formData.confirmPassword) { setError('New passwords do not match.'); return; }
-
     try {
       setLoading(true);
       const res = await fetch('http://127.0.0.1:8000/users/password', {
         method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type':  'application/json',
-        },
-        body: JSON.stringify({
-          currentPassword: formData.currentPassword,
-          newPassword:     formData.newPassword,
-        }),
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword: formData.currentPassword, newPassword: formData.newPassword }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -117,14 +152,41 @@ const Profile = () => {
         {/* Left — Profile card */}
         <div className="col-12 col-lg-4">
           <div className="card-custom text-center" style={{ padding: '2rem' }}>
-            <div style={{
-              width: '80px', height: '80px', borderRadius: '50%',
-              backgroundColor: roleColor, display: 'flex', alignItems: 'center',
-              justifyContent: 'center', fontSize: '2rem', margin: '0 auto 1rem auto',
-              color: '#fff', fontWeight: 700,
-            }}>
-              {user?.name?.charAt(0).toUpperCase()}
+
+            {/* Profile Picture */}
+            <div style={{ position: 'relative', width: '90px', margin: '0 auto 1rem auto' }}>
+              {previewPic ? (
+                <img src={previewPic} alt="Profile"
+                  style={{ width: '90px', height: '90px', borderRadius: '50%', objectFit: 'cover', border: `3px solid ${roleColor}` }}
+                />
+              ) : (
+                <div style={{
+                  width: '90px', height: '90px', borderRadius: '50%',
+                  backgroundColor: roleColor, display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', fontSize: '2rem', color: '#fff', fontWeight: 700,
+                }}>
+                  {user?.name?.charAt(0).toUpperCase()}
+                </div>
+              )}
+
+              {/* Camera button */}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={picLoading}
+                style={{
+                  position: 'absolute', bottom: 0, right: 0,
+                  width: '28px', height: '28px', borderRadius: '50%',
+                  backgroundColor: roleColor, color: '#fff',
+                  border: '2px solid #fff', cursor: 'pointer',
+                  fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                {picLoading ? '⏳' : '📷'}
+              </button>
+              <input ref={fileInputRef} type="file" accept="image/*"
+                onChange={handlePictureChange} style={{ display: 'none' }} />
             </div>
+
             <h5 style={{ fontWeight: 700, marginBottom: '0.3rem' }}>{user?.name}</h5>
             <span style={{
               display: 'inline-block', backgroundColor: roleColor + '20', color: roleColor,
@@ -137,6 +199,10 @@ const Profile = () => {
               {user?.department  && <div>🏫 {user.department}</div>}
               {user?.phone       && <div>📞 {user.phone}</div>}
             </div>
+
+            <p style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: '1rem', marginBottom: 0 }}>
+              Click 📷 to change your profile picture
+            </p>
           </div>
         </div>
 

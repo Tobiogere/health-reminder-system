@@ -148,10 +148,12 @@ def login(request):
         user_data['department']  = profile.department
         user_data['identifier']  = profile.matric_number
         user_data['phone'] = profile.phone_number or ''
+        user_data['profilePicture'] = request.build_absolute_uri(user.profile_picture.url) if user.profile_picture else None
         
     # For non-patient users, get phone from user model
     if not hasattr(user, 'patient_profile'):
         user_data['phone'] = user.phone_number or ''
+        user_data['profilePicture'] = request.build_absolute_uri(user.profile_picture.url) if user.profile_picture else None
     token = get_tokens_for_user(user)
 
     return Response({
@@ -391,3 +393,13 @@ def update_user_status(request, id):
             {'message': 'User not found.'},
             status=status.HTTP_404_NOT_FOUND
         )
+    
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def upload_profile_picture(request):
+    if 'profile_picture' not in request.FILES:
+        return Response({'message': 'No image provided.'}, status=status.HTTP_400_BAD_REQUEST)
+    request.user.profile_picture = request.FILES['profile_picture']
+    request.user.save()
+    picture_url = request.build_absolute_uri(request.user.profile_picture.url)
+    return Response({'message': 'Profile picture updated.', 'url': picture_url}, status=status.HTTP_200_OK)
