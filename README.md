@@ -95,9 +95,9 @@ npx expo start
 
 | Role | Username | Password |
 |---|---|---|
-| Patient | RUN/CMP/22/12937 | newpassword123 |
+| Patient | RUN/CMP/22/12937 | Smartkid2.0 |
 | Doctor | STF/DOC/001 | Smartkid2.0 |
-| Pharmacist | STF/PHARM/001 | test1234 |
-| Admin | admin001 | test1234 |
+| Pharmacist | STF/PHARM/001 | Smartkid2.0 |
+| Admin | admin001 | smartkid2.0 |
 
 
