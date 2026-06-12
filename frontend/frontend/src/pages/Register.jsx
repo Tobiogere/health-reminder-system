@@ -41,6 +41,8 @@ const Register = () => {
       return 'Passwords do not match.';
     if (password.length < 6)
       return 'Password must be at least 6 characters.';
+    if ((role === 'doctor' || role === 'pharmacist') && !formData.staffId)
+      return 'Please enter your Staff ID.';
     if (role === 'patient') {
       if (!patientType) return 'Please select a patient type.';
       if (patientType === 'student' && (!matricNumber || !department))
@@ -246,7 +248,25 @@ const Register = () => {
               )}
             </div>
           )}
-
+          {/* Doctor / Pharmacist staff ID */}
+          {(role === 'doctor' || role === 'pharmacist') && (
+            <div className="mb-3 p-3" style={{ backgroundColor: '#f8f9ff', borderRadius: '8px', border: '1px solid #dee2e6' }}>
+              <div className="mb-1">
+                <label className="form-label fw-semibold">Staff ID</label>
+                <input
+                  type="text"
+                  name="staffId"
+                  className="form-control"
+                  placeholder={role === 'doctor' ? 'e.g. STF/DOC/001' : 'e.g. STF/PHARM/001'}
+                  value={formData.staffId}
+                  onChange={handleChange}
+                />
+                <small style={{ color: 'var(--muted)', fontSize: '0.75rem' }}>
+                  This will be your login identifier.
+                </small>
+              </div>
+            </div>
+          )}
           {/* Password */}
           <div className="mb-3">
             <label className="form-label fw-semibold">Password</label>

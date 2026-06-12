@@ -64,7 +64,7 @@ export default function RegisterScreen({ navigation }) {
       setLoading(true);
       // TODO: Replace with real API call
       // await axios.post('/auth/register', formData);
-      const response = await fetch('http://10.1.22.82:8000/auth/register', {
+      const response = await fetch('http://10.201.102.198:8000/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),

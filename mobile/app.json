@@ -1,27 +1,45 @@
 {
   "expo": {
-    "name": "mobile",
+    "name": "RUN Med Reminder",
     "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#6B0F1A"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "RUN Med Reminder needs camera access to update your profile picture.",
+        "NSPhotoLibraryUsageDescription": "RUN Med Reminder needs photo library access to update your profile picture."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#6B0F1A"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES"
+      ]
     },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "RUN Med Reminder needs access to your photos to update your profile picture.",
+          "cameraPermission": "RUN Med Reminder needs camera access to take a profile picture."
+        }
+      ]
+    ],
     "web": {
       "favicon": "./assets/favicon.png"
     }

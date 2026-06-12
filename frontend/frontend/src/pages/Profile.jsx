@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import useAuth from '../hooks/useAuth';
 import PageWrapper from '../components/PageWrapper';
 
@@ -24,6 +24,24 @@ const Profile = () => {
   });
 
   const token = localStorage.getItem('token');
+
+  // Fetch latest profile from backend on mount (syncs picture from mobile)
+  useEffect(() => {
+    if (!token) return;
+    fetch('http://127.0.0.1:8000/auth/me', {
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data?.id && data.profilePicture) {
+          setPreviewPic(data.profilePicture);
+          const updated = { ...user, profilePicture: data.profilePicture };
+          localStorage.setItem('user', JSON.stringify(updated));
+          login(updated);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const roleColors = {
     patient:    '#C9A84C',
@@ -61,6 +79,7 @@ const Profile = () => {
       });
       const data = await res.json();
       if (res.ok) {
+        setPreviewPic(data.url);
         const updatedUser = { ...user, profilePicture: data.url };
         localStorage.setItem('user', JSON.stringify(updatedUser));
         login(updatedUser);
@@ -246,7 +265,6 @@ const Profile = () => {
                   </small>
                 </div>
 
-                {/* Caregiver fields — patients only */}
                 {user?.role === 'patient' && (
                   <>
                     <hr style={{ margin: '1rem 0' }} />

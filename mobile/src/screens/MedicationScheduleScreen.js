@@ -1,251 +1,166 @@
-import React, { useState } from 'react';
-import {
-  View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, SafeAreaView, StatusBar,
-} from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, ActivityIndicator, RefreshControl } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTheme } from '../context/ThemeContext';
 
 const MAROON = '#6B0F1A';
-const GOLD   = '#C9A84C';
-const BG     = '#faf9f7';
-
-const scheduleData = [
-  {
-    id: 1,
-    name: 'Paracetamol 500mg',
-    diagnosis: 'Malaria',
-    frequency: 'Three times daily',
-    duration: '7 days',
-    startDate: '10 Apr 2026',
-    endDate: '17 Apr 2026',
-    times: ['08:00 AM', '02:00 PM', '08:00 PM'],
-    days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    status: 'active',
-    color: '#0d6efd',
-  },
-  {
-    id: 2,
-    name: 'Amoxicillin 250mg',
-    diagnosis: 'Malaria',
-    frequency: 'Twice daily',
-    duration: '7 days',
-    startDate: '10 Apr 2026',
-    endDate: '17 Apr 2026',
-    times: ['08:00 AM', '08:00 PM'],
-    days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    status: 'active',
-    color: '#198754',
-  },
-  {
-    id: 3,
-    name: 'Vitamin C 1000mg',
-    diagnosis: 'Malaria',
-    frequency: 'Once daily',
-    duration: '7 days',
-    startDate: '10 Apr 2026',
-    endDate: '17 Apr 2026',
-    times: ['08:00 AM'],
-    days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    status: 'active',
-    color: '#6f42c1',
-  },
-];
+const API    = 'http://10.201.102.198:8000';
+const COLORS = ['#0d6efd', '#198754', '#6f42c1', '#fd7e14', '#dc3545', '#20c997'];
 
 export default function MedicationScheduleScreen({ navigation }) {
-  const [selectedDrug, setSelectedDrug] = useState(scheduleData[0]);
+  const { theme: t } = useTheme();
+  const [schedules, setSchedules]     = useState([]);
+  const [selectedIdx, setSelectedIdx] = useState(0);
+  const [loading, setLoading]         = useState(true);
+  const [refreshing, setRefreshing]   = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const userData = await AsyncStorage.getItem('user');
+      const token    = await AsyncStorage.getItem('token');
+      if (!userData || !token) return;
+      const u = JSON.parse(userData);
+      const res = await fetch(`${API}/patients/${u.id}/schedule`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const data = await res.json();
+      if (res.ok && Array.isArray(data)) setSchedules(data);
+    } catch {}
+    finally { setLoading(false); setRefreshing(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const selected = schedules[selectedIdx];
+  const color    = COLORS[selectedIdx % COLORS.length];
+  const today    = new Date().toDateString();
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: MAROON }}>
       <StatusBar barStyle="light-content" backgroundColor={MAROON} />
-
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtn}>← Back</Text>
-        </TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.goBack()}><Text style={styles.backBtn}>← Back</Text></TouchableOpacity>
         <Text style={styles.headerTitle}>Medication Schedule</Text>
         <View style={{ width: 50 }} />
       </View>
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+      {loading ? (
+        <View style={{ flex: 1, backgroundColor: t.bg, borderTopLeftRadius: 24, borderTopRightRadius: 24, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color={MAROON} />
+        </View>
+      ) : schedules.length === 0 ? (
+        <View style={{ flex: 1, backgroundColor: t.bg, borderTopLeftRadius: 24, borderTopRightRadius: 24, alignItems: 'center', justifyContent: 'center', padding: 40 }}>
+          <Text style={{ fontSize: 40, marginBottom: 16 }}>📅</Text>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: t.text }}>No Schedule Yet</Text>
+          <Text style={{ fontSize: 13, color: t.muted, textAlign: 'center', marginTop: 8 }}>Your schedule will appear after the pharmacist processes your prescription.</Text>
+        </View>
+      ) : (
+        <ScrollView style={{ flex: 1, backgroundColor: t.bg, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} colors={[MAROON]} />}>
 
-        {/* Drug selector */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Select Medication</Text>
-          {scheduleData.map(drug => (
-            <TouchableOpacity
-              key={drug.id}
-              style={[
-                styles.drugTab,
-                selectedDrug.id === drug.id && styles.drugTabActive,
-                { borderLeftColor: drug.color },
-              ]}
-              onPress={() => setSelectedDrug(drug)}
-            >
-              <View style={[styles.drugDot, { backgroundColor: drug.color }]} />
-              <View style={{ flex: 1 }}>
-                <Text style={[
-                  styles.drugTabName,
-                  selectedDrug.id === drug.id && styles.drugTabNameActive,
-                ]}>
-                  {drug.name}
-                </Text>
-                <Text style={styles.drugTabFreq}>{drug.frequency}</Text>
+          <View style={{ padding: 16, marginBottom: 4 }}>
+            <Text style={[styles.sectionTitle, { color: t.text }]}>Select Medication</Text>
+            {schedules.map((s, i) => {
+              const c = COLORS[i % COLORS.length];
+              return (
+                <TouchableOpacity key={s.scheduleId} style={[styles.drugTab, { backgroundColor: t.card, borderColor: t.border, borderLeftColor: c },
+                  selectedIdx === i && { backgroundColor: t.subBg }]}
+                  onPress={() => setSelectedIdx(i)}>
+                  <View style={[styles.drugDot, { backgroundColor: c }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.drugTabName, { color: selectedIdx === i ? t.text : t.muted }]}>{s.medication}</Text>
+                    <Text style={[styles.drugTabFreq, { color: t.muted }]}>{s.frequency}x daily · {s.duration} days</Text>
+                  </View>
+                  {selectedIdx === i && <Text style={{ color: c, fontWeight: '700' }}>✓</Text>}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {selected && (
+            <>
+              <View style={{ padding: 16, marginBottom: 4 }}>
+                <Text style={[styles.sectionTitle, { color: t.text }]}>Schedule Details</Text>
+                <View style={[styles.detailCard, { backgroundColor: t.card, borderColor: t.border, borderTopColor: color }]}>
+                  {[
+                    { label: '💊 Drug',      value: selected.medication },
+                    { label: '💉 Dosage',    value: selected.dosage || '—' },
+                    { label: '🔁 Frequency', value: `${selected.frequency}x daily` },
+                    { label: '📅 Duration',  value: `${selected.duration} days` },
+                    { label: '▶️ Start',     value: new Date(selected.startDate).toLocaleDateString('en-GB') },
+                    { label: '⏹️ End',       value: new Date(selected.endDate).toLocaleDateString('en-GB') },
+                  ].map((row, i, arr) => (
+                    <View key={row.label}>
+                      <View style={styles.detailRow}>
+                        <Text style={[styles.detailLabel, { color: t.muted }]}>{row.label}</Text>
+                        <Text style={[styles.detailValue, { color: t.text }]}>{row.value}</Text>
+                      </View>
+                      {i < arr.length - 1 && <View style={[styles.divider, { backgroundColor: t.border }]} />}
+                    </View>
+                  ))}
+                </View>
               </View>
-              {selectedDrug.id === drug.id && (
-                <Text style={{ color: drug.color, fontWeight: '700' }}>✓</Text>
+
+              {selected.specificTimes?.length > 0 && (
+                <View style={{ padding: 16, marginBottom: 4 }}>
+                  <Text style={[styles.sectionTitle, { color: t.text }]}>🔔 Reminder Times</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {selected.specificTimes.map((time, i) => (
+                      <View key={i} style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, borderWidth: 1,
+                        backgroundColor: color + '15', borderColor: color + '40' }}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color }}>{time}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
               )}
-            </TouchableOpacity>
-          ))}
-        </View>
 
-        {/* Schedule detail */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Schedule Details</Text>
-          <View style={[styles.detailCard, { borderTopColor: selectedDrug.color }]}>
-
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>💊 Drug</Text>
-              <Text style={styles.detailValue}>{selectedDrug.name}</Text>
-            </View>
-            <View style={styles.divider} />
-
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>🩺 Diagnosis</Text>
-              <Text style={styles.detailValue}>{selectedDrug.diagnosis}</Text>
-            </View>
-            <View style={styles.divider} />
-
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>🔁 Frequency</Text>
-              <Text style={styles.detailValue}>{selectedDrug.frequency}</Text>
-            </View>
-            <View style={styles.divider} />
-
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>📅 Duration</Text>
-              <Text style={styles.detailValue}>{selectedDrug.duration}</Text>
-            </View>
-            <View style={styles.divider} />
-
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>▶️ Start</Text>
-              <Text style={styles.detailValue}>{selectedDrug.startDate}</Text>
-            </View>
-            <View style={styles.divider} />
-
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>⏹️ End</Text>
-              <Text style={styles.detailValue}>{selectedDrug.endDate}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Reminder times */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🔔 Reminder Times</Text>
-          <View style={styles.timesRow}>
-            {selectedDrug.times.map((time, i) => (
-              <View key={i} style={[styles.timeChip, { backgroundColor: selectedDrug.color + '15', borderColor: selectedDrug.color + '40' }]}>
-                <Text style={[styles.timeChipText, { color: selectedDrug.color }]}>{time}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* Days */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📆 Active Days</Text>
-          <View style={styles.daysRow}>
-            {selectedDrug.days.map((day, i) => (
-              <View key={i} style={[styles.dayChip, { backgroundColor: selectedDrug.color }]}>
-                <Text style={styles.dayChipText}>{day}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        <View style={{ height: 40 }} />
-      </ScrollView>
+              {selected.doses?.length > 0 && (
+                <View style={{ padding: 16 }}>
+                  <Text style={[styles.sectionTitle, { color: t.text }]}>📊 Dose History</Text>
+                  {selected.doses.slice(0, 7).map(dose => {
+                    const isToday = new Date(dose.scheduledTime).toDateString() === today;
+                    return (
+                      <View key={dose.id} style={[styles.doseRow, { backgroundColor: t.card, borderColor: t.border },
+                        dose.status === 'taken'  && { backgroundColor: t.dark ? '#1a3a2a' : '#f0fff4', borderColor: '#b7ebc8' },
+                        dose.status === 'missed' && { backgroundColor: t.dark ? '#3a1a1a' : '#fff5f5', borderColor: '#f5c2c7' },
+                        isToday && { borderWidth: 2, borderColor: '#C9A84C' },
+                      ]}>
+                        <Text style={{ fontSize: 12, color: t.muted }}>
+                          {new Date(dose.scheduledTime).toLocaleDateString('en-GB')} at{' '}
+                          {new Date(dose.scheduledTime).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                          {isToday && <Text style={{ color: '#C9A84C', fontWeight: '700' }}> · TODAY</Text>}
+                        </Text>
+                        <Text style={{ fontSize: 12, fontWeight: '700',
+                          color: dose.status === 'taken' ? '#198754' : dose.status === 'missed' ? '#dc3545' : '#fd7e14' }}>
+                          {dose.status === 'taken' ? '✅ Taken' : dose.status === 'missed' ? '❌ Missed' : '⏳ Pending'}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </>
+          )}
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: MAROON },
-  header: {
-    backgroundColor: MAROON,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16 },
   backBtn: { color: 'rgba(255,255,255,0.85)', fontSize: 14, fontWeight: '600' },
   headerTitle: { color: '#fff', fontSize: 16, fontWeight: '700' },
-
-  scroll: { flex: 1, backgroundColor: BG, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
-
-  section: { padding: 16, marginBottom: 4 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#212529', marginBottom: 12 },
-
-  // Drug tabs
-  drugTab: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-    borderLeftWidth: 4,
-  },
-  drugTabActive: {
-    backgroundColor: '#f8f9ff',
-    borderColor: '#e9ecef',
-  },
+  sectionTitle: { fontSize: 15, fontWeight: '700', marginBottom: 12 },
+  drugTab: { borderRadius: 12, padding: 14, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderLeftWidth: 4 },
   drugDot: { width: 10, height: 10, borderRadius: 5 },
-  drugTabName: { fontSize: 14, fontWeight: '600', color: '#495057' },
-  drugTabNameActive: { color: '#212529' },
-  drugTabFreq: { fontSize: 12, color: '#6c757d', marginTop: 2 },
-
-  // Detail card
-  detailCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    borderTopWidth: 3,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  detailLabel: { fontSize: 13, color: '#6c757d', fontWeight: '500' },
-  detailValue: { fontSize: 13, color: '#212529', fontWeight: '700', maxWidth: '55%', textAlign: 'right' },
-  divider: { height: 1, backgroundColor: '#f0f0f0' },
-
-  // Times
-  timesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  timeChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  timeChipText: { fontSize: 14, fontWeight: '700' },
-
-  // Days
-  daysRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  dayChip: {
-    width: 44, height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dayChipText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  drugTabName: { fontSize: 14, fontWeight: '600' },
+  drugTabFreq: { fontSize: 12, marginTop: 2 },
+  detailCard: { borderRadius: 12, padding: 16, borderTopWidth: 3, borderWidth: 1 },
+  detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 },
+  detailLabel: { fontSize: 13, fontWeight: '500' },
+  detailValue: { fontSize: 13, fontWeight: '700', maxWidth: '55%', textAlign: 'right' },
+  divider: { height: 1 },
+  doseRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 10, marginBottom: 6, borderRadius: 8, borderWidth: 1 },
 });

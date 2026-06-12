@@ -23,7 +23,18 @@ export const AuthProvider = ({ children }) => {
           localStorage.removeItem('user');
           setUser(null);
         } else {
-          setUser(JSON.parse(saved));
+          const savedUser = JSON.parse(saved);
+          setUser(savedUser);
+          // Re-fetch profile to get latest picture
+          fetch('http://127.0.0.1:8000/auth/me', {
+            headers: { 'Authorization': `Bearer ${token}` },
+          }).then(res => res.json()).then(data => {
+            if (data && data.id) {
+              const updated = { ...savedUser, profilePicture: data.profilePicture };
+              setUser(updated);
+              localStorage.setItem('user', JSON.stringify(updated));
+            }
+          }).catch(() => {});
         }
       } catch (err) {
         // Token is not a valid JWT (e.g. during development)

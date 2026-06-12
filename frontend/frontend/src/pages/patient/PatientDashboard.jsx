@@ -87,7 +87,7 @@ const PatientDashboard = () => {
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`http://127.0.0.1:8000/medications/${id}/taken`, {
-        method: 'PATCH',
+        method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
       });
       if (res.ok) {
