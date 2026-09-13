@@ -41,7 +41,10 @@ const Profile = () => {
         }
       })
       .catch(() => {});
+<<<<<<< HEAD
           // eslint-disable-next-line react-hooks/exhaustive-deps
+=======
+>>>>>>> a6f95e4dc759fe24f7dd05e8977415ce006e0cd4
   }, []);
 
   const roleColors = {
