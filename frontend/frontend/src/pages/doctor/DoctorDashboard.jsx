@@ -204,7 +204,7 @@ const DoctorDashboard = () => {
 
   const grouped      = groupPrescriptions(prescriptions);
   const pendingCount = grouped.filter(g => g.status === 'pending').length;
-  const activeCount  = grouped.filter(g => g.status === 'active').length;
+  // const activeCount  = grouped.filter(g => g.status === 'active').length;
   const todayCount   = grouped.filter(g => new Date(g.createdAt).toDateString() === new Date().toDateString()).length;
 
   const missedByPatient = missedDoses.reduce((acc, dose) => {

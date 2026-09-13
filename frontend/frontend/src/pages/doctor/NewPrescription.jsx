@@ -33,6 +33,7 @@ const NewPrescription = ({ patient, doctorName, onSubmit, onCancel }) => {
       }
     };
     fetchDrugs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const toggleDrug = (drug) => {
