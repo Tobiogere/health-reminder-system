@@ -30,10 +30,15 @@ def book_renewal(request, id):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    from prescriptions.models import Prescription
+    # from prescriptions.models import Prescription
     prescription = Prescription.objects.filter(
-        patient=request.user
-    ).last()
+        patient=request.user,
+        medication_name=drug,
+    ).first()
+    if not prescription:
+        prescription = Prescription.objects.filter(
+            patient=request.user
+        ).last()
 
     if not prescription:
         return Response(
@@ -62,7 +67,7 @@ def get_renewals(request):
     """
     Pharmacist gets all renewal requests.
     """
-    if request.user.role != 'pharmacist':
+    if request.user.role not in ['pharmacist', 'admin']:
         return Response(
             {'message': 'Access denied.'},
             status=status.HTTP_403_FORBIDDEN

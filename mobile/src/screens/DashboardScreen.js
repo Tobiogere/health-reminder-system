@@ -1,545 +1,280 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  SafeAreaView,
-  StatusBar,
+  View, Text, StyleSheet, ScrollView,
+  TouchableOpacity, SafeAreaView, StatusBar, ActivityIndicator, RefreshControl,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
+import { Image } from 'react-native';
+import { useTheme } from '../context/ThemeContext';
+import { scheduleAllMedicationReminders } from '../services/notificationService';
 const MAROON = '#6B0F1A';
 const GOLD   = '#C9A84C';
-const BG     = '#faf9f7';
+const API    = 'http://10.201.102.198:8000';
 
-// ── Dummy Data ──────────────────────────────────────────────
-const todayMeds = [
-  { id: 1, name: 'Paracetamol 500mg', time: '08:00 AM', scheduledTime: '08:00', taken: false, missed: false },
-  { id: 2, name: 'Amoxicillin 250mg', time: '12:00 PM', scheduledTime: '12:00', taken: false, missed: false },
-  { id: 3, name: 'Vitamin C 1000mg',  time: '06:00 PM', scheduledTime: '18:00', taken: false, missed: false },
-];
-// ────────────────────────────────────────────────────────────
-
-export default function DashboardScreen({ navigation }) {
-  const [user, setUser]             = useState(null);
-  const [medications, setMedications] = useState(todayMeds);
-  const [renewalSent, setRenewalSent] = useState(false);
-
-  useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const userData = await AsyncStorage.getItem('user');
-        if (userData) setUser(JSON.parse(userData));
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    loadUser();
-
-    // Check missed doses every minute
-    const interval = setInterval(() => {
-      checkMissedDoses();
-    }, 60000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const checkMissedDoses = () => {
-    const now = new Date();
-    setMedications(prev => prev.map(med => {
-      if (med.taken || med.missed) return med;
-      const [hours, minutes] = med.scheduledTime.split(':').map(Number);
-      const scheduled = new Date();
-      scheduled.setHours(hours, minutes, 0, 0);
-      const diff = (now - scheduled) / 60000;
-      return { ...med, missed: diff > 90 };
-    }));
-  };
-
-  const markTaken = (id) => {
-    setMedications(prev =>
-      prev.map(m => m.id === id ? { ...m, taken: true } : m)
-    );
-  };
-
-  const handleLogout = async () => {
-    await AsyncStorage.removeItem('token');
-    await AsyncStorage.removeItem('user');
-    navigation.replace('Login');
-  };
-
-  const takenCount  = medications.filter(m => m.taken).length;
-  const totalCount  = medications.length;
-  const missedCount = medications.filter(m => m.missed && !m.taken).length;
-  const missedMeds  = medications.filter(m => m.missed && !m.taken);
-
-  const today = new Date().toLocaleDateString('en-GB', {
-    weekday: 'long', day: 'numeric', month: 'long',
+const groupByDrug = (medications) => {
+  const groups = {};
+  medications.forEach(med => {
+    if (!groups[med.name]) groups[med.name] = { name: med.name, doses: [] };
+    groups[med.name].doses.push(med);
   });
+  return Object.values(groups);
+};
+
+const DrugCard = ({ group, onMarkTaken, t }) => {
+  const [open, setOpen] = useState(false);
+  const takenCount  = group.doses.filter(d => d.status === 'taken').length;
+  const missedCount = group.doses.filter(d => d.status === 'missed').length;
+  const overallStatus = group.doses.every(d => d.status === 'taken') ? 'taken'
+    : group.doses.some(d => d.status === 'missed') ? 'missed' : 'pending';
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="light-content" backgroundColor={MAROON} />
+    <View style={[styles.drugCard, { backgroundColor: t.card, borderColor: t.border },
+      overallStatus === 'taken'  && { backgroundColor: t.dark ? '#1a3a2a' : '#f0fff4', borderColor: '#b7ebc8' },
+      overallStatus === 'missed' && { backgroundColor: t.dark ? '#3a1a1a' : '#fff5f5', borderColor: '#f5c2c7' },
+    ]}>
+      <TouchableOpacity style={styles.drugCardHeader} onPress={() => setOpen(!open)} activeOpacity={0.8}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.drugCardName, { color: t.text },
+            overallStatus === 'taken'  && { textDecorationLine: 'line-through', color: t.muted },
+            overallStatus === 'missed' && { color: '#842029' },
+          ]}>{group.name}</Text>
+          <Text style={[styles.drugCardSub, { color: t.muted }]}>
+            {takenCount}/{group.doses.length} taken{missedCount > 0 ? ` · ${missedCount} missed` : ''}
+          </Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {overallStatus === 'taken'  && <Text style={{ fontSize: 12, color: '#198754', fontWeight: '600' }}>✅ Done</Text>}
+          {overallStatus === 'missed' && takenCount === 0 && <Text style={{ fontSize: 12, color: '#dc3545', fontWeight: '600' }}>❌</Text>}
+          <Text style={{ fontSize: 11, color: t.muted }}>{open ? '▲' : '▼'}</Text>
+        </View>
+      </TouchableOpacity>
+      {open && (
+        <View style={[styles.dosesDropdown, { borderTopColor: t.border }]}>
+          {group.doses.map(dose => (
+            <View key={dose.id} style={[styles.doseRow, { borderBottomColor: t.border }]}>
+              <Text style={{ fontSize: 13, color: t.muted }}>🕐 {dose.time}</Text>
+              {dose.status === 'taken' ? <Text style={{ fontSize: 12, color: '#198754', fontWeight: '600' }}>✅ Taken</Text>
+               : dose.status === 'missed' ? <Text style={{ fontSize: 12, color: '#dc3545', fontWeight: '600' }}>❌ Missed</Text>
+               : <TouchableOpacity style={styles.markBtn} onPress={() => onMarkTaken(dose.id)}>
+                   <Text style={styles.markBtnText}>Mark Taken</Text>
+                 </TouchableOpacity>}
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+};
 
-      {/* Header */}
+export default function DashboardScreen({ navigation }) {
+  const { theme: t } = useTheme();
+  const [user, setUser]           = useState(null);
+  const [medications, setMedications] = useState([]);
+  const [prescriptions, setPrescriptions] = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadData = useCallback(async () => {
+    try {
+      const userData = await AsyncStorage.getItem('user');
+      const token    = await AsyncStorage.getItem('token');
+      if (!userData || !token) { navigation.replace('Login'); return; }
+      const u = JSON.parse(userData);
+      setUser(u);
+      const [medsRes, prescRes] = await Promise.all([
+        fetch(`${API}/patients/${u.id}/medications/today`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API}/patients/${u.id}/prescriptions`,    { headers: { 'Authorization': `Bearer ${token}` } }),
+      ]);
+      const medsData = await medsRes.json();
+      const prescData = await prescRes.json();
+      if (medsRes.ok && Array.isArray(medsData)) {
+        setMedications(medsData);
+        scheduleAllMedicationReminders(medsData);
+      }
+      if (prescRes.ok && Array.isArray(prescData)) setPrescriptions(prescData);
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); setRefreshing(false); }
+  }, [navigation]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+  useFocusEffect(useCallback(() => {
+    AsyncStorage.getItem('user').then(u => { if (u) setUser(JSON.parse(u)); });
+  }, []));
+
+  const markTaken = async (doseId) => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      const res = await fetch(`${API}/medications/${doseId}/taken`, {
+        method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      });
+      if (res.ok) setMedications(prev => prev.map(m => m.id === doseId ? { ...m, status: 'taken' } : m));
+    } catch {}
+  };
+
+  const takenCount  = medications.filter(m => m.status === 'taken').length;
+  const missedCount = medications.filter(m => m.status === 'missed').length;
+  const remaining   = medications.filter(m => m.status === 'pending').length;
+  const missedMeds  = medications.filter(m => m.status === 'missed');
+  const drugGroups  = groupByDrug(medications);
+  const activePrescriptions = prescriptions.filter(p => p.status === 'active');
+  const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: MAROON }}>
+      <StatusBar barStyle="light-content" backgroundColor={MAROON} />
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>Welcome back 👋</Text>
           <Text style={styles.userName}>{user?.name || 'Patient'}</Text>
           <Text style={styles.date}>{today}</Text>
         </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={styles.notifBtn}
-            onPress={() => navigation.navigate('Notifications')}
-          >
-            <Text style={styles.notifIcon}>🔔</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <TouchableOpacity style={styles.notifBtn} onPress={() => navigation.navigate('Notifications')}>
+            <Text style={{ fontSize: 18 }}>🔔</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.profileBtn}
-            onPress={() => navigation.navigate('Profile')}
-          >
-            <Text style={styles.profileInitial}>
-              {user?.name?.charAt(0).toUpperCase() || 'P'}
-            </Text>
+            <TouchableOpacity style={styles.profileBtn} onPress={() => navigation.navigate('Profile')}>
+            {user?.profilePicture ? (
+              <Image source={{ uri: user.profilePicture }} style={{ width: 38, height: 38, borderRadius: 19 }} />
+            ) : (
+              <Text style={{ fontSize: 16, fontWeight: '800', color: MAROON }}>{user?.name?.charAt(0).toUpperCase() || 'P'}</Text>
+            )}
           </TouchableOpacity>
         </View>
       </View>
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-
-        {/* Summary Cards */}
-        <View style={styles.cardsRow}>
-          <View style={[styles.card, { borderTopColor: MAROON }]}>
-            <Text style={[styles.cardNumber, { color: MAROON }]}>{totalCount}</Text>
-            <Text style={styles.cardLabel}>Today's Meds</Text>
-          </View>
-          <View style={[styles.card, { borderTopColor: '#198754' }]}>
-            <Text style={[styles.cardNumber, { color: '#198754' }]}>{takenCount}</Text>
-            <Text style={styles.cardLabel}>Taken</Text>
-          </View>
-          <View style={[styles.card, { borderTopColor: '#fd7e14' }]}>
-            <Text style={[styles.cardNumber, { color: '#fd7e14' }]}>{totalCount - takenCount - missedCount}</Text>
-            <Text style={styles.cardLabel}>Remaining</Text>
-          </View>
-          <View style={[styles.card, { borderTopColor: '#dc3545' }]}>
-            <Text style={[styles.cardNumber, { color: '#dc3545' }]}>{missedCount}</Text>
-            <Text style={styles.cardLabel}>Missed</Text>
-          </View>
+      {loading ? (
+        <View style={{ flex: 1, backgroundColor: t.bg, borderTopLeftRadius: 24, borderTopRightRadius: 24, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color={MAROON} />
         </View>
+      ) : (
+        <ScrollView style={{ flex: 1, backgroundColor: t.bg, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} colors={[MAROON]} />}>
 
-        {/* Missed Dose Alert */}
-        {missedMeds.length > 0 && (
-          <View style={styles.missedAlert}>
-            <Text style={styles.missedAlertTitle}>⚠️ Missed Dose{missedMeds.length > 1 ? 's' : ''} Today</Text>
-            {missedMeds.map(med => (
-              <View key={med.id} style={styles.missedAlertRow}>
-                <Text style={styles.missedAlertDrug}>{med.name}</Text>
-                <Text style={styles.missedAlertTime}>Due at {med.time}</Text>
-              </View>
-            ))}
-            <Text style={styles.missedAlertNote}>
-              Please inform your doctor or pharmacist if you continue to miss doses.
-            </Text>
-          </View>
-        )}
-
-        {/* Today's Medications */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>💊 Today's Medications</Text>
-            <Text style={styles.sectionCount}>{takenCount}/{totalCount} taken</Text>
-          </View>
-
-          {/* Progress bar */}
-          <View style={styles.progressBg}>
-            <View style={[styles.progressFill, {
-              width: `${(takenCount / totalCount) * 100}%`
-            }]} />
-          </View>
-
-          {medications.map(med => (
-            <View
-              key={med.id}
-              style={[
-                styles.medCard,
-                med.taken  && styles.medCardTaken,
-                med.missed && !med.taken && styles.medCardMissed,
-              ]}
-            >
-              <View style={styles.medInfo}>
-                <Text style={[
-                  styles.medName,
-                  med.taken && styles.medNameTaken,
-                  med.missed && !med.taken && styles.medNameMissed,
-                ]}>
-                  {med.name}
-                </Text>
-                <Text style={styles.medTime}>
-                  🕐 {med.time}
-                  {med.missed && !med.taken && (
-                    <Text style={styles.missedTag}> · Missed</Text>
-                  )}
-                </Text>
-              </View>
-
-              {med.taken ? (
-                <Text style={styles.takenBadge}>✅ Taken</Text>
-              ) : med.missed ? (
-                <Text style={styles.missedBadge}>❌ Missed</Text>
-              ) : (
-                <TouchableOpacity
-                  style={styles.markBtn}
-                  onPress={() => markTaken(med.id)}
-                >
-                  <Text style={styles.markBtnText}>Mark Taken</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          ))}
-        </View>
-
-        {/* Active Prescription */}
-        <View style={styles.section}>
-          <View style={styles.prescriptionCard}>
-            <View style={styles.prescriptionHeader}>
-              <Text style={styles.sectionTitle}>📄 Active Prescription</Text>
-              {!renewalSent ? (
-                <TouchableOpacity
-                  style={styles.renewalBtn}
-                  onPress={() => navigation.navigate('RenewalRequest')}
-                >
-                  <Text style={styles.renewalBtnText}>🔄 Renew</Text>
-                </TouchableOpacity>
-              ) : (
-                <Text style={styles.renewalSent}>✅ Requested</Text>
-              )}
-            </View>
-            <View style={styles.prescriptionDetails}>
-              <Text style={styles.prescriptionRow}>📅 Issued: <Text style={styles.bold}>10 Apr 2026</Text></Text>
-              <Text style={styles.prescriptionRow}>👨‍⚕️ Doctor: <Text style={styles.bold}>Dr. Adebayo</Text></Text>
-              <Text style={styles.prescriptionRow}>🩺 Diagnosis: <Text style={styles.bold}>Malaria</Text></Text>
-              <Text style={styles.prescriptionRow}>💊 Drugs: <Text style={styles.bold}>Paracetamol, Amoxicillin, Vitamin C</Text></Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Quick Actions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.actionsGrid}>
+          {/* Summary Cards */}
+          <View style={{ flexDirection: 'row', padding: 16, gap: 10 }}>
             {[
-              { icon: '📅', label: 'My Schedule',   screen: 'MedicationSchedule'  },
-              { icon: '📋', label: 'History',        screen: 'PrescriptionHistory' },
-              { icon: '🔄', label: 'Request Renewal',screen: 'RenewalRequest'      },
-              { icon: '👤', label: 'My Profile',     screen: 'Profile'             },
-            ].map(action => (
-              <TouchableOpacity
-                key={action.screen}
-                style={styles.actionCard}
-                onPress={() => navigation.navigate(action.screen)}
-              >
-                <Text style={styles.actionIcon}>{action.icon}</Text>
-                <Text style={styles.actionLabel}>{action.label}</Text>
-              </TouchableOpacity>
+              { label: "Today's", value: medications.length, color: MAROON },
+              { label: 'Taken',   value: takenCount,          color: '#198754' },
+              { label: 'Left',    value: remaining,            color: '#fd7e14' },
+              { label: 'Missed',  value: missedCount,          color: '#dc3545' },
+            ].map(s => (
+              <View key={s.label} style={[styles.card, { backgroundColor: t.card, borderTopColor: s.color }]}>
+                <Text style={[styles.cardNumber, { color: s.color }]}>{s.value}</Text>
+                <Text style={[styles.cardLabel, { color: t.muted }]}>{s.label}</Text>
+              </View>
             ))}
           </View>
-        </View>
 
-        {/* Logout */}
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
+          {/* Missed Alert */}
+          {missedMeds.length > 0 && (
+            <View style={[styles.missedAlert, { backgroundColor: t.dark ? '#3a1a1a' : '#fff5f5' }]}>
+              <Text style={styles.missedAlertTitle}>⚠️ Missed Today</Text>
+              {missedMeds.slice(0, 3).map(med => (
+                <View key={med.id} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <Text style={styles.missedAlertDrug}>{med.name}</Text>
+                  <Text style={styles.missedAlertTime}>Due {med.time}</Text>
+                </View>
+              ))}
+              {missedMeds.length > 3 && <Text style={{ color: '#842029', fontSize: 11, fontStyle: 'italic' }}>+{missedMeds.length - 3} more</Text>}
+            </View>
+          )}
 
-        <View style={{ height: 40 }} />
-      </ScrollView>
+          {/* Today's Meds */}
+          <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <Text style={[styles.sectionTitle, { color: t.text }]}>💊 Today's Medications</Text>
+              <Text style={{ fontSize: 12, color: t.muted }}>{takenCount}/{medications.length} taken</Text>
+            </View>
+            {medications.length > 0 && (
+              <View style={{ height: 6, backgroundColor: t.border, borderRadius: 999, marginBottom: 12 }}>
+                <View style={{ height: '100%', backgroundColor: '#198754', borderRadius: 999,
+                  width: `${medications.length > 0 ? (takenCount / medications.length) * 100 : 0}%` }} />
+              </View>
+            )}
+            {drugGroups.length === 0
+              ? <Text style={{ color: t.muted, fontSize: 13, textAlign: 'center', padding: 16 }}>No medications today.</Text>
+              : drugGroups.map(g => <DrugCard key={g.name} group={g} onMarkTaken={markTaken} t={t} />)
+            }
+          </View>
+
+          {/* Active Prescriptions */}
+          {activePrescriptions.length > 0 && (
+            <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
+              <Text style={[styles.sectionTitle, { color: t.text }]}>📄 Active Prescriptions</Text>
+              {activePrescriptions.slice(0, 3).map(rx => (
+                <View key={rx.id} style={[styles.prescriptionCard, { backgroundColor: t.card, borderColor: t.border }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: t.text, flex: 1 }}>💊 {rx.medicationName}</Text>
+                    <TouchableOpacity style={styles.renewalBtn} onPress={() => navigation.navigate('RenewalRequest')}>
+                      <Text style={styles.renewalBtnText}>🔄 Renew</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={{ fontSize: 12, color: t.muted }}>🩺 {rx.diagnosis}</Text>
+                  <Text style={{ fontSize: 12, color: t.muted }}>👨‍⚕️ {rx.doctorName}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Quick Actions */}
+          <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
+            <Text style={[styles.sectionTitle, { color: t.text }]}>Quick Actions</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+              {[
+                { icon: '📅', label: 'My Schedule',    screen: 'MedicationSchedule'  },
+                { icon: '📋', label: 'History',         screen: 'PrescriptionHistory' },
+                { icon: '🔄', label: 'Request Renewal', screen: 'RenewalRequest'      },
+                { icon: '👤', label: 'My Profile',      screen: 'Profile'             },
+              ].map(action => (
+                <TouchableOpacity key={action.screen} style={[styles.actionCard, { backgroundColor: t.card, borderColor: t.border }]}
+                  onPress={() => navigation.navigate(action.screen)}>
+                  <Text style={{ fontSize: 28, marginBottom: 8 }}>{action.icon}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: t.text, textAlign: 'center' }}>{action.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <TouchableOpacity style={[styles.logoutBtn, { backgroundColor: t.card, borderColor: t.border }]}
+            onPress={async () => { await AsyncStorage.multiRemove(['token', 'user']); navigation.replace('Login'); }}>
+            <Text style={styles.logoutText}>Logout</Text>
+          </TouchableOpacity>
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: MAROON,
-  },
-
-  // Header
-  header: {
-    backgroundColor: MAROON,
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  greeting: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.7)',
-  },
-  userName: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#fff',
-    marginTop: 2,
-  },
-  date: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.55)',
-    marginTop: 2,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  notifBtn: {
-    width: 38, height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  notifIcon: { fontSize: 18 },
-  profileBtn: {
-    width: 38, height: 38,
-    borderRadius: 19,
-    backgroundColor: GOLD,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  profileInitial: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: MAROON,
-  },
-
-  // Scroll
-  scroll: {
-    flex: 1,
-    backgroundColor: BG,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-  },
-
-  // Summary Cards
-  cardsRow: {
-    flexDirection: 'row',
-    padding: 16,
-    gap: 10,
-  },
-  card: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
-    borderTopWidth: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  cardNumber: {
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  cardLabel: {
-    fontSize: 10,
-    color: '#6c757d',
-    marginTop: 2,
-    textAlign: 'center',
-  },
-
-  // Missed Alert
-  missedAlert: {
-    backgroundColor: '#fff5f5',
-    borderRadius: 12,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#f5c2c7',
-  },
-  missedAlertTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#842029',
-    marginBottom: 8,
-  },
-  missedAlertRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  missedAlertDrug: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#842029',
-  },
-  missedAlertTime: {
-    fontSize: 12,
-    color: '#842029',
-  },
-  missedAlertNote: {
-    fontSize: 11,
-    color: '#842029',
-    marginTop: 6,
-    fontStyle: 'italic',
-  },
-
-  // Section
-  section: {
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#212529',
-    marginBottom: 10,
-  },
-  sectionCount: {
-    fontSize: 12,
-    color: '#6c757d',
-  },
-
-  // Progress
-  progressBg: {
-    height: 6,
-    backgroundColor: '#e9ecef',
-    borderRadius: 999,
-    marginBottom: 12,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#198754',
-    borderRadius: 999,
-  },
-
-  // Medication cards
-  medCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-  },
-  medCardTaken: {
-    backgroundColor: '#f0fff4',
-    borderColor: '#b7ebc8',
-    opacity: 0.8,
-  },
-  medCardMissed: {
-    backgroundColor: '#fff5f5',
-    borderColor: '#f5c2c7',
-  },
-  medInfo: { flex: 1 },
-  medName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#212529',
-    marginBottom: 3,
-  },
-  medNameTaken: {
-    textDecorationLine: 'line-through',
-    color: '#6c757d',
-  },
-  medNameMissed: { color: '#842029' },
-  medTime: { fontSize: 12, color: '#6c757d' },
-  missedTag: { color: '#dc3545', fontWeight: '600' },
-  takenBadge: { fontSize: 13, color: '#198754', fontWeight: '600' },
-  missedBadge: { fontSize: 13, color: '#dc3545', fontWeight: '600' },
-  markBtn: {
-    backgroundColor: MAROON,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
+  header: { backgroundColor: MAROON, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  greeting: { fontSize: 13, color: 'rgba(255,255,255,0.7)' },
+  userName: { fontSize: 20, fontWeight: '800', color: '#fff', marginTop: 2 },
+  date: { fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 2 },
+  notifBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
+  profileBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: GOLD, alignItems: 'center', justifyContent: 'center' },
+  card: { flex: 1, borderRadius: 12, padding: 12, alignItems: 'center', borderTopWidth: 3, elevation: 2 },
+  cardNumber: { fontSize: 22, fontWeight: '800' },
+  cardLabel: { fontSize: 10, marginTop: 2, textAlign: 'center' },
+  missedAlert: { borderRadius: 12, marginHorizontal: 16, marginBottom: 8, padding: 14, borderWidth: 1, borderColor: '#f5c2c7' },
+  missedAlertTitle: { fontSize: 14, fontWeight: '700', color: '#842029', marginBottom: 8 },
+  missedAlertDrug: { fontSize: 13, fontWeight: '600', color: '#842029' },
+  missedAlertTime: { fontSize: 12, color: '#842029' },
+  sectionTitle: { fontSize: 15, fontWeight: '700', marginBottom: 10 },
+  drugCard: { borderRadius: 12, marginBottom: 8, borderWidth: 1, overflow: 'hidden' },
+  drugCardHeader: { flexDirection: 'row', alignItems: 'center', padding: 14 },
+  drugCardName: { fontSize: 14, fontWeight: '700', marginBottom: 2 },
+  drugCardSub: { fontSize: 12 },
+  dosesDropdown: { borderTopWidth: 1, paddingHorizontal: 14, paddingVertical: 8 },
+  doseRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1 },
+  markBtn: { backgroundColor: MAROON, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
   markBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-
-  // Prescription
-  prescriptionCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-  },
-  prescriptionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  prescriptionDetails: { gap: 4 },
-  prescriptionRow: { fontSize: 13, color: '#6c757d', marginBottom: 3 },
-  bold: { fontWeight: '700', color: '#212529' },
-  renewalBtn: {
-    backgroundColor: '#fff3cd',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: '#ffc107',
-  },
+  prescriptionCard: { borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1 },
+  renewalBtn: { backgroundColor: '#fff3cd', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: '#ffc107' },
   renewalBtnText: { fontSize: 12, fontWeight: '700', color: '#856404' },
-  renewalSent: { fontSize: 12, color: '#198754', fontWeight: '600' },
-
-  // Quick Actions
-  actionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  actionCard: {
-    width: '47%',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  actionIcon: { fontSize: 28, marginBottom: 8 },
-  actionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#212529',
-    textAlign: 'center',
-  },
-
-  // Logout
-  logoutBtn: {
-    marginHorizontal: 16,
-    marginTop: 8,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 10,
-    padding: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#dee2e6',
-  },
-  logoutText: {
-    color: '#dc3545',
-    fontWeight: '700',
-    fontSize: 14,
-  },
+  actionCard: { width: '47%', borderRadius: 12, padding: 16, alignItems: 'center', borderWidth: 1, elevation: 1 },
+  logoutBtn: { marginHorizontal: 16, marginTop: 8, borderRadius: 10, padding: 14, alignItems: 'center', borderWidth: 1 },
+  logoutText: { color: '#dc3545', fontWeight: '700', fontSize: 14 },
 });

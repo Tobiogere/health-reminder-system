@@ -86,16 +86,20 @@ def register(request):
 
     else:
         # For doctor, pharmacist, admin
-        if User.objects.filter(username=full_name).exists():
+        staff_id = data.get('staffId', '').strip()
+        username = staff_id if staff_id else full_name
+
+        if User.objects.filter(username=username).exists():
             return Response(
-                {'message': 'A user with this name already exists.'},
+                {'message': 'A user with this ID already exists.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         user = User.objects.create_user(
-            username=full_name,
+            username=username,
             password=password,
-            role=role
+            role=role,
+            first_name=full_name,
         )
 
     return Response(
@@ -237,7 +241,11 @@ def get_patient_prescriptions(request, id):
     try:
         from prescriptions.models import Prescription
         patient = User.objects.get(id=id)
-        prescriptions = Prescription.objects.filter(patient=patient)
+        # Doctors only see their own prescriptions for this patient
+        if request.user.role == 'doctor':
+            prescriptions = Prescription.objects.filter(patient=patient, doctor=request.user)
+        else:
+            prescriptions = Prescription.objects.filter(patient=patient)
 
         data = []
         for p in prescriptions:
@@ -413,3 +421,18 @@ def upload_profile_picture(request):
     request.user.save()
     picture_url = request.build_absolute_uri(request.user.profile_picture.url)
     return Response({'message': 'Profile picture updated.', 'url': picture_url}, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def me(request):
+    user = request.user
+    data = {
+        'id':   user.id,
+        'name': user.username,
+        'role': user.role,
+        'profilePicture': request.build_absolute_uri(user.profile_picture.url) if user.profile_picture else None,
+    }
+    if hasattr(user, 'patient_profile'):
+        p = user.patient_profile
+        data['name'] = p.full_name
+    return Response(data)
